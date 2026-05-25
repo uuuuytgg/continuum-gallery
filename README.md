@@ -10,8 +10,8 @@ Open `index.html` directly in a browser, or serve the folder with any static ser
 
 1. Create a new GitHub repository, for example `continuum-gallery`.
 2. Push this folder to the repository's `main` branch.
-3. In GitHub, open **Settings > Pages** and choose **GitHub Actions** as the source.
-4. The included workflow deploys the static site.
+3. Enable GitHub Pages from the `main` branch root.
+4. The site will be available at `https://YOUR_USER.github.io/continuum-gallery/`.
 
 ## Google Photos Picker
 
