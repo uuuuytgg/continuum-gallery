@@ -664,6 +664,28 @@ body[data-mode="sphere"] .grain-canvas {
   border-color: rgba(247, 241, 232, 0.52);
 }
 
+.setup-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.setup-links a,
+.setup-links button {
+  display: grid;
+  min-width: 0;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid rgba(247, 241, 232, 0.16);
+  border-radius: 7px;
+  background: rgba(247, 241, 232, 0.08);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .panel-actions button {
   min-height: 38px;
   min-width: 0;

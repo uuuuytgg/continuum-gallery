@@ -62,6 +62,11 @@
           <span>Client ID</span>
           <input id="googleClientId" autocomplete="off" spellcheck="false" placeholder="*.apps.googleusercontent.com" />
         </label>
+        <div class="setup-links" aria-label="Google Cloud setup">
+          <a href="https://console.cloud.google.com/apis/library/photospicker.googleapis.com" target="_blank" rel="noopener" title="Open Google Photos Picker API">API</a>
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" title="Open OAuth credentials">OAuth</a>
+          <button type="button" id="copyOriginButton" title="Copy authorized JavaScript origin">Origin</button>
+        </div>
         <div class="panel-actions">
           <button type="button" id="saveClientButton">保存</button>
           <button type="button" id="importPhotosButton">选择照片</button>

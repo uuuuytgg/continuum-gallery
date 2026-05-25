@@ -13,6 +13,7 @@ const photosPanelClose = document.getElementById("photosPanelClose");
 const googleClientIdInput = document.getElementById("googleClientId");
 const saveClientButton = document.getElementById("saveClientButton");
 const importPhotosButton = document.getElementById("importPhotosButton");
+const copyOriginButton = document.getElementById("copyOriginButton");
 const photosStatus = document.getElementById("photosStatus");
 const viewer = document.getElementById("viewer");
 const viewerImage = document.getElementById("viewerImage");
@@ -102,6 +103,7 @@ function init() {
   photosPanelClose.addEventListener("click", closePhotosPanel);
   saveClientButton.addEventListener("click", saveGoogleClientId);
   importPhotosButton.addEventListener("click", startGooglePhotosImport);
+  copyOriginButton.addEventListener("click", copyGoogleOrigin);
   gallery.addEventListener("click", handleCardClick);
   stage.addEventListener("pointerdown", handlePointerDown);
   window.addEventListener("pointermove", handlePointerMove);
@@ -357,6 +359,18 @@ function saveGoogleClientId() {
   state.google.tokenClient = null;
   state.google.accessToken = "";
   setGoogleStatus("Client ID saved");
+}
+
+async function copyGoogleOrigin() {
+  const origin = "https://uuuuytgg.github.io";
+  try {
+    await navigator.clipboard.writeText(origin);
+    setGoogleStatus("Origin copied");
+  } catch {
+    googleClientIdInput.value = origin;
+    googleClientIdInput.select();
+    setGoogleStatus("Copy origin manually");
+  }
 }
 
 async function startGooglePhotosImport() {
