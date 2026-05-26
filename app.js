@@ -1185,10 +1185,10 @@ function applySphereLayout({ seedPhysics = false } = {}) {
 
 function setCardStyle(card, layout) {
   const transform = `translate3d(${layout.x.toFixed(2)}px, ${layout.y.toFixed(2)}px, 0)`;
-  const width = Math.max(1, layout.width).toFixed(2);
-  const height = Math.max(1, layout.height).toFixed(2);
+  const widthValue = Math.max(1, layout.width);
+  const heightValue = Math.max(1, layout.height);
   const opacity = layout.opacity.toFixed(3);
-  const radius = layout.radius.toFixed(2);
+  const radiusValue = layout.radius;
   const z = String(layout.z);
   const cached = cardLayouts.get(card) || {};
 
@@ -1197,13 +1197,13 @@ function setCardStyle(card, layout) {
     card.style.transform = transform;
     cached.transform = transform;
   }
-  if (cached.width !== width) {
-    card.style.width = `${width}px`;
-    cached.width = width;
+  if (cached.widthValue === undefined || Math.abs(cached.widthValue - widthValue) > 1) {
+    card.style.width = `${widthValue.toFixed(2)}px`;
+    cached.widthValue = widthValue;
   }
-  if (cached.height !== height) {
-    card.style.height = `${height}px`;
-    cached.height = height;
+  if (cached.heightValue === undefined || Math.abs(cached.heightValue - heightValue) > 1) {
+    card.style.height = `${heightValue.toFixed(2)}px`;
+    cached.heightValue = heightValue;
   }
   if (cached.opacity !== opacity) {
     card.style.opacity = opacity;
@@ -1213,9 +1213,9 @@ function setCardStyle(card, layout) {
     card.style.zIndex = z;
     cached.z = z;
   }
-  if (cached.radius !== radius) {
-    card.style.borderRadius = `${radius}px`;
-    cached.radius = radius;
+  if (cached.radiusValue === undefined || Math.abs(cached.radiusValue - radiusValue) > 1) {
+    card.style.borderRadius = `${radiusValue.toFixed(2)}px`;
+    cached.radiusValue = radiusValue;
   }
   if (cached.filter !== layout.filter) {
     card.style.filter = layout.filter;

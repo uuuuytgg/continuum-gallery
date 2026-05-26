@@ -255,11 +255,8 @@ body.is-dragging .stage {
 body.is-switching .photo-card,
 .photo-card.is-settling {
   transition:
-    transform 760ms var(--ease),
-    width 760ms var(--ease),
-    height 760ms var(--ease),
-    opacity 520ms ease,
-    border-radius 760ms var(--ease);
+    transform 720ms var(--ease),
+    opacity 420ms ease;
 }
 
 .photo-card:focus-visible {
