@@ -96,10 +96,12 @@ const state = {
 
 const items = createItems();
 const cards = [];
+const cardLayouts = new WeakMap();
 let spherePoints = [];
 let physics = [];
 let grainParticles = [];
 let resizeTimer = 0;
+let imageLayoutTimer = 0;
 
 init();
 
@@ -260,7 +262,7 @@ function createPhotoCard(item, index) {
   card.dataset.index = String(index);
   card.setAttribute("aria-label", `${item.title} ${item.place}`);
   card.innerHTML = `
-    <img alt="${item.title}" draggable="false" src="${item.src}">
+    <img alt="${item.title}" draggable="false" loading="lazy" decoding="async" src="${getCardImageSrc(item)}">
     <span class="caption">
       <strong>${item.title}</strong>
       <span>${item.place}</span>
@@ -271,11 +273,31 @@ function createPhotoCard(item, index) {
   image.addEventListener("load", () => {
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
       item.ratio = image.naturalHeight / image.naturalWidth;
-      if (state.mode === "waterfall") applyLayout({ immediate: true });
+      if (state.mode === "waterfall") scheduleWaterfallRelayout();
     }
   });
 
   return card;
+}
+
+function getCardImageSrc(item) {
+  return item.previewSrc || item.src;
+}
+
+function updateCardPreview(index) {
+  const card = cards[index];
+  const item = items[index];
+  if (!card || !item) return;
+  const image = card.querySelector("img");
+  const src = getCardImageSrc(item);
+  if (image && image.src !== src) image.src = src;
+}
+
+function scheduleWaterfallRelayout() {
+  window.clearTimeout(imageLayoutTimer);
+  imageLayoutTimer = window.setTimeout(() => {
+    if (state.mode === "waterfall") applyLayout({ immediate: true });
+  }, 80);
 }
 
 function replacePhotoItems(newItems) {
@@ -329,6 +351,9 @@ function releaseDisplayedObjectUrls() {
   items.forEach((item) => {
     if (item.source !== "demo" && typeof item.src === "string" && item.src.startsWith("blob:")) {
       URL.revokeObjectURL(item.src);
+    }
+    if (item.source !== "demo" && typeof item.previewSrc === "string" && item.previewSrc.startsWith("blob:")) {
+      URL.revokeObjectURL(item.previewSrc);
     }
   });
 }
@@ -587,9 +612,14 @@ async function materializeGooglePhotosItems(pickedItems) {
     setGoogleStatus(`Loading ${index + 1}/${photos.length}`);
 
     try {
-      const blob = await googlePhotosBlob(`${file.baseUrl}=w1800-h1800`);
+      const [blob, previewBlob] = await Promise.all([
+        googlePhotosBlob(`${file.baseUrl}=w1800-h1800`),
+        googlePhotosBlob(`${file.baseUrl}=w520-h520`),
+      ]);
       const objectUrl = URL.createObjectURL(blob);
+      const previewUrl = URL.createObjectURL(previewBlob);
       state.google.objectUrls.push(objectUrl);
+      state.google.objectUrls.push(previewUrl);
       imported.push({
         id: item.id || `${Date.now()}-${index}`,
         title: cleanFilename(file.filename || `Google Photo ${index + 1}`),
@@ -597,7 +627,9 @@ async function materializeGooglePhotosItems(pickedItems) {
         ratio: height / width,
         source: "google",
         blob,
+        previewBlob,
         src: objectUrl,
+        previewSrc: previewUrl,
       });
     } catch (error) {
       console.warn("Skipping Google Photos item", error);
@@ -620,6 +652,9 @@ async function restorePersistedPhotos() {
 
     const restored = records.map((record, index) => {
       const src = URL.createObjectURL(record.blob);
+      const previewSrc = record.previewBlob ? URL.createObjectURL(record.previewBlob) : "";
+      state.google.objectUrls.push(src);
+      if (previewSrc) state.google.objectUrls.push(previewSrc);
       return {
         id: record.id || `restored-${index}`,
         title: record.title || `Google Photo ${index + 1}`,
@@ -627,15 +662,66 @@ async function restorePersistedPhotos() {
         ratio: record.ratio || 1,
         source: "google",
         blob: record.blob,
+        previewBlob: record.previewBlob,
         src,
+        previewSrc,
       };
     });
 
     restorePhotoItems(restored);
+    hydrateMissingPreviews(restored);
     setGoogleStatus(`Restored ${restored.length} photos`);
   } catch (error) {
     console.warn("Could not restore persisted photos", error);
   }
+}
+
+function hydrateMissingPreviews(photoItems) {
+  if (!("createImageBitmap" in window)) return;
+  const pending = photoItems
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.blob instanceof Blob && !item.previewBlob);
+
+  if (!pending.length) return;
+
+  const run = async () => {
+    for (const { item, index } of pending) {
+      try {
+        const previewBlob = await makePreviewBlob(item.blob);
+        if (!previewBlob) continue;
+        const previewSrc = URL.createObjectURL(previewBlob);
+        item.previewBlob = previewBlob;
+        item.previewSrc = previewSrc;
+        state.google.objectUrls.push(previewSrc);
+        updateCardPreview(index);
+        await delay(16);
+      } catch (error) {
+        console.warn("Could not build preview", error);
+      }
+    }
+  };
+
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(() => run(), { timeout: 1800 });
+  } else {
+    window.setTimeout(run, 600);
+  }
+}
+
+async function makePreviewBlob(blob) {
+  const bitmap = await createImageBitmap(blob);
+  const maxSide = 560;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext("2d", { alpha: false });
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+
+  return new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.76);
+  });
 }
 
 async function savePersistedPhotos(photoItems) {
@@ -649,6 +735,7 @@ async function savePersistedPhotos(photoItems) {
       ratio: item.ratio,
       source: item.source,
       blob: item.blob,
+      previewBlob: item.previewBlob,
     }));
 
   if (!records.length) return;
@@ -1091,21 +1178,51 @@ function applySphereLayout({ seedPhysics = false } = {}) {
       opacity: clamp(0.36 + depth * 0.78, 0.28, 1),
       z: Math.round(depth * 1000),
       radius: body.size / 2,
-      filter: `saturate(${0.9 + depth * 0.34}) brightness(${0.72 + depth * 0.42})`,
+      filter: "none",
     });
   });
 }
 
 function setCardStyle(card, layout) {
   const transform = `translate3d(${layout.x.toFixed(2)}px, ${layout.y.toFixed(2)}px, 0)`;
-  card.style.setProperty("--card-transform", transform);
-  card.style.transform = transform;
-  card.style.width = `${Math.max(1, layout.width).toFixed(2)}px`;
-  card.style.height = `${Math.max(1, layout.height).toFixed(2)}px`;
-  card.style.opacity = layout.opacity.toFixed(3);
-  card.style.zIndex = String(layout.z);
-  card.style.borderRadius = `${layout.radius}px`;
-  card.style.filter = layout.filter;
+  const width = Math.max(1, layout.width).toFixed(2);
+  const height = Math.max(1, layout.height).toFixed(2);
+  const opacity = layout.opacity.toFixed(3);
+  const radius = layout.radius.toFixed(2);
+  const z = String(layout.z);
+  const cached = cardLayouts.get(card) || {};
+
+  if (cached.transform !== transform) {
+    card.style.setProperty("--card-transform", transform);
+    card.style.transform = transform;
+    cached.transform = transform;
+  }
+  if (cached.width !== width) {
+    card.style.width = `${width}px`;
+    cached.width = width;
+  }
+  if (cached.height !== height) {
+    card.style.height = `${height}px`;
+    cached.height = height;
+  }
+  if (cached.opacity !== opacity) {
+    card.style.opacity = opacity;
+    cached.opacity = opacity;
+  }
+  if (cached.z !== z) {
+    card.style.zIndex = z;
+    cached.z = z;
+  }
+  if (cached.radius !== radius) {
+    card.style.borderRadius = `${radius}px`;
+    cached.radius = radius;
+  }
+  if (cached.filter !== layout.filter) {
+    card.style.filter = layout.filter;
+    cached.filter = layout.filter;
+  }
+
+  cardLayouts.set(card, cached);
 }
 
 function tick() {
@@ -1217,9 +1334,13 @@ function resetViewerTransform() {
 }
 
 function updateViewerTransform() {
-  viewerImage.style.setProperty("--viewer-zoom", state.viewer.zoom.toFixed(3));
-  viewerImage.style.setProperty("--viewer-pan-x", `${state.viewer.panX.toFixed(1)}px`);
-  viewerImage.style.setProperty("--viewer-pan-y", `${state.viewer.panY.toFixed(1)}px`);
+  const zoom = state.viewer.zoom.toFixed(3);
+  const panX = `${state.viewer.panX.toFixed(1)}px`;
+  const panY = `${state.viewer.panY.toFixed(1)}px`;
+  viewerImage.style.setProperty("--viewer-zoom", zoom);
+  viewerImage.style.setProperty("--viewer-pan-x", panX);
+  viewerImage.style.setProperty("--viewer-pan-y", panY);
+  viewerImage.style.transform = `translate3d(${panX}, ${panY}, 0) scale(${zoom})`;
   viewer.dataset.zoomed = state.viewer.zoom > 1.01 ? "true" : "false";
   viewerZoomReset.textContent = `${Math.round(state.viewer.zoom * 100)}%`;
 }

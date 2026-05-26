@@ -247,19 +247,19 @@ body.is-dragging .stage {
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  will-change: transform, width, height, opacity, filter, border-radius;
+  backface-visibility: hidden;
+  contain: layout paint style;
+  will-change: transform, width, height, opacity, border-radius;
 }
 
 body.is-switching .photo-card,
 .photo-card.is-settling {
   transition:
-    transform 880ms var(--ease),
-    width 880ms var(--ease),
-    height 880ms var(--ease),
+    transform 760ms var(--ease),
+    width 760ms var(--ease),
+    height 760ms var(--ease),
     opacity 520ms ease,
-    border-radius 880ms var(--ease),
-    filter 520ms ease,
-    box-shadow 520ms ease;
+    border-radius 760ms var(--ease);
 }
 
 .photo-card:focus-visible {
@@ -276,6 +276,7 @@ body.is-switching .photo-card,
   pointer-events: none;
   user-select: none;
   filter: saturate(1.04) contrast(1.045);
+  transform: translateZ(0);
 }
 
 .caption {
