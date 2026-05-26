@@ -685,6 +685,7 @@ function hydrateMissingPreviews(photoItems) {
   if (!pending.length) return;
 
   const run = async () => {
+    let didCreatePreview = false;
     for (const { item, index } of pending) {
       try {
         const previewBlob = await makePreviewBlob(item.blob);
@@ -694,11 +695,13 @@ function hydrateMissingPreviews(photoItems) {
         item.previewSrc = previewSrc;
         state.google.objectUrls.push(previewSrc);
         updateCardPreview(index);
+        didCreatePreview = true;
         await delay(16);
       } catch (error) {
         console.warn("Could not build preview", error);
       }
     }
+    if (didCreatePreview) savePersistedPhotos(photoItems).catch(() => {});
   };
 
   if ("requestIdleCallback" in window) {
