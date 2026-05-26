@@ -20,6 +20,11 @@ const viewerImage = document.getElementById("viewerImage");
 const viewerTitle = document.getElementById("viewerTitle");
 const viewerMeta = document.getElementById("viewerMeta");
 const viewerClose = document.getElementById("viewerClose");
+const viewerFrame = document.getElementById("viewerFrame");
+const viewerImageStage = document.getElementById("viewerImageStage");
+const viewerZoomOut = document.getElementById("viewerZoomOut");
+const viewerZoomReset = document.getElementById("viewerZoomReset");
+const viewerZoomIn = document.getElementById("viewerZoomIn");
 
 const MODES = ["waterfall", "orbit", "sphere"];
 const GOOGLE_CLIENT_ID_KEY = "continuum-gallery.googleClientId";
@@ -59,6 +64,14 @@ const state = {
   pointerY: -9999,
   transitionUntil: 0,
   lastZoomSwitch: 0,
+  viewer: {
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    isPanning: false,
+    lastX: 0,
+    lastY: 0,
+  },
   orbit: {
     x: 0,
     y: 0,
@@ -115,11 +128,32 @@ function init() {
   window.addEventListener("pointerup", handlePointerUp);
   stage.addEventListener("wheel", handleWheel, { passive: false });
   viewerClose.addEventListener("click", closeViewer);
+  viewerZoomOut.addEventListener("click", () => zoomViewerBy(0.8));
+  viewerZoomReset.addEventListener("click", resetViewerTransform);
+  viewerZoomIn.addEventListener("click", () => zoomViewerBy(1.25));
+  viewerFrame.addEventListener("wheel", handleViewerWheel, { passive: false });
+  viewerFrame.addEventListener("pointerdown", handleViewerPointerDown);
+  viewerFrame.addEventListener("dblclick", handleViewerDoubleClick);
+  window.addEventListener("pointermove", handleViewerPointerMove);
+  window.addEventListener("pointerup", handleViewerPointerUp);
   viewer.addEventListener("click", (event) => {
     if (event.target === viewer) closeViewer();
   });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && viewer.classList.contains("is-open")) closeViewer();
+    if (!viewer.classList.contains("is-open")) return;
+    if (event.key === "Escape") closeViewer();
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomViewerBy(1.2);
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      zoomViewerBy(0.84);
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      resetViewerTransform();
+    }
   });
 }
 
@@ -1173,6 +1207,118 @@ function clearGrain() {
   grainCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 }
 
+function resetViewerTransform() {
+  state.viewer.zoom = 1;
+  state.viewer.panX = 0;
+  state.viewer.panY = 0;
+  state.viewer.isPanning = false;
+  document.body.classList.remove("viewer-panning");
+  updateViewerTransform();
+}
+
+function updateViewerTransform() {
+  viewerImage.style.setProperty("--viewer-zoom", state.viewer.zoom.toFixed(3));
+  viewerImage.style.setProperty("--viewer-pan-x", `${state.viewer.panX.toFixed(1)}px`);
+  viewerImage.style.setProperty("--viewer-pan-y", `${state.viewer.panY.toFixed(1)}px`);
+  viewer.dataset.zoomed = state.viewer.zoom > 1.01 ? "true" : "false";
+  viewerZoomReset.textContent = `${Math.round(state.viewer.zoom * 100)}%`;
+}
+
+function zoomViewerBy(multiplier, event) {
+  zoomViewerTo(state.viewer.zoom * multiplier, event);
+}
+
+function zoomViewerTo(nextZoom, event) {
+  const previousZoom = state.viewer.zoom;
+  const zoom = clamp(nextZoom, 1, 5);
+  if (Math.abs(zoom - previousZoom) < 0.001) return;
+
+  if (event && viewerImageStage) {
+    const rect = viewerImageStage.getBoundingClientRect();
+    const originX = event.clientX - rect.left - rect.width / 2 - state.viewer.panX;
+    const originY = event.clientY - rect.top - rect.height / 2 - state.viewer.panY;
+    const ratio = zoom / previousZoom;
+    state.viewer.panX -= originX * (ratio - 1);
+    state.viewer.panY -= originY * (ratio - 1);
+  }
+
+  state.viewer.zoom = zoom;
+  boundViewerPan();
+  updateViewerTransform();
+}
+
+function boundViewerPan() {
+  if (state.viewer.zoom <= 1.01 || !viewerImageStage) {
+    state.viewer.panX = 0;
+    state.viewer.panY = 0;
+    return;
+  }
+
+  const rect = viewerImageStage.getBoundingClientRect();
+  const maxX = rect.width * (state.viewer.zoom - 1) * 0.5;
+  const maxY = rect.height * (state.viewer.zoom - 1) * 0.5;
+  state.viewer.panX = clamp(state.viewer.panX, -maxX, maxX);
+  state.viewer.panY = clamp(state.viewer.panY, -maxY, maxY);
+}
+
+function handleViewerWheel(event) {
+  if (!viewer.classList.contains("is-open")) return;
+  event.preventDefault();
+
+  const panIntent = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.25;
+  if (panIntent && state.viewer.zoom > 1.01) {
+    state.viewer.panX -= event.deltaX || event.deltaY;
+    state.viewer.panY -= event.shiftKey ? 0 : event.deltaY;
+    boundViewerPan();
+    updateViewerTransform();
+    return;
+  }
+
+  const multiplier = Math.exp(-event.deltaY * 0.0014);
+  zoomViewerBy(multiplier, event);
+}
+
+function handleViewerPointerDown(event) {
+  if (!viewer.classList.contains("is-open")) return;
+  const isMiddleButton = event.button === 1;
+  const canPan = state.viewer.zoom > 1.01 || isMiddleButton || event.pointerType === "touch";
+  if (!canPan) return;
+
+  event.preventDefault();
+  state.viewer.isPanning = true;
+  state.viewer.lastX = event.clientX;
+  state.viewer.lastY = event.clientY;
+  document.body.classList.add("viewer-panning");
+  viewerFrame.setPointerCapture?.(event.pointerId);
+}
+
+function handleViewerPointerMove(event) {
+  if (!state.viewer.isPanning) return;
+  const dx = event.clientX - state.viewer.lastX;
+  const dy = event.clientY - state.viewer.lastY;
+  state.viewer.panX += dx;
+  state.viewer.panY += dy;
+  state.viewer.lastX = event.clientX;
+  state.viewer.lastY = event.clientY;
+  boundViewerPan();
+  updateViewerTransform();
+}
+
+function handleViewerPointerUp() {
+  if (!state.viewer.isPanning) return;
+  state.viewer.isPanning = false;
+  document.body.classList.remove("viewer-panning");
+}
+
+function handleViewerDoubleClick(event) {
+  event.preventDefault();
+  if (state.viewer.zoom > 1.01) {
+    resetViewerTransform();
+  } else {
+    zoomViewerTo(2.2, event);
+  }
+}
+
 function openViewer(index) {
   const card = cards[index];
   if (!card) return;
@@ -1180,6 +1326,7 @@ function openViewer(index) {
   const item = items[index];
   const sourceRect = card.getBoundingClientRect();
 
+  resetViewerTransform();
   viewerTitle.textContent = item.title;
   viewerMeta.textContent = item.place;
   viewerImage.src = item.src;
@@ -1189,24 +1336,26 @@ function openViewer(index) {
   viewer.setAttribute("aria-hidden", "false");
 
   requestAnimationFrame(() => {
-    const targetRect = getViewerTargetRect(item);
-    const clone = makeFlightClone(item.src, sourceRect);
-    document.body.appendChild(clone);
-    const flight = clone.animate(
-      [
-        rectKeyframe(sourceRect, 0.98),
-        rectKeyframe(targetRect, 1),
-      ],
-      {
-        duration: 720,
-        easing: "cubic-bezier(0.2, 0.82, 0.18, 1)",
-        fill: "forwards",
-      },
-    );
     const imageReady = viewerImage.decode ? viewerImage.decode().catch(() => {}) : Promise.resolve();
-    Promise.all([flight.finished, imageReady]).finally(() => {
-      clone.remove();
-      viewerImage.classList.add("is-visible");
+    imageReady.finally(() => {
+      const targetRect = getViewerTargetRect(item);
+      const clone = makeFlightClone(item.src, sourceRect);
+      document.body.appendChild(clone);
+      const flight = clone.animate(
+        [
+          rectKeyframe(sourceRect, 0.98),
+          rectKeyframe(targetRect, 1),
+        ],
+        {
+          duration: 720,
+          easing: "cubic-bezier(0.2, 0.82, 0.18, 1)",
+          fill: "forwards",
+        },
+      );
+      flight.finished.finally(() => {
+        clone.remove();
+        viewerImage.classList.add("is-visible");
+      });
     });
   });
 }
@@ -1214,7 +1363,9 @@ function openViewer(index) {
 function closeViewer() {
   if (!viewer.classList.contains("is-open")) return;
   const card = cards[state.selected];
-  const sourceRect = viewerImage.getBoundingClientRect();
+  const sourceRect = state.viewer.zoom > 1.01
+    ? viewerImage.getBoundingClientRect()
+    : getViewerTargetRect(items[state.selected] || {});
   const targetRect = card ? card.getBoundingClientRect() : sourceRect;
   const clone = makeFlightClone(viewerImage.src, sourceRect);
   document.body.appendChild(clone);
@@ -1232,6 +1383,7 @@ function closeViewer() {
     },
   ).finished.finally(() => {
     clone.remove();
+    resetViewerTransform();
     viewer.classList.remove("is-open");
     viewer.setAttribute("aria-hidden", "true");
   });
@@ -1251,20 +1403,22 @@ function makeFlightClone(src, rect) {
 }
 
 function getViewerTargetRect(item) {
-  const frame = viewer.querySelector(".viewer-frame");
-  const frameRect = frame.getBoundingClientRect();
-  const ratio = clamp(item.ratio || 1, 0.45, 1.9);
-  let width = frameRect.width;
+  const stageRect = (viewerImageStage || viewerFrame).getBoundingClientRect();
+  const naturalRatio = viewerImage.naturalWidth > 0 && viewerImage.naturalHeight > 0
+    ? viewerImage.naturalHeight / viewerImage.naturalWidth
+    : item.ratio || 1;
+  const ratio = clamp(naturalRatio, 0.08, 8);
+  let width = stageRect.width;
   let height = width * ratio;
 
-  if (height > frameRect.height) {
-    height = frameRect.height;
+  if (height > stageRect.height) {
+    height = stageRect.height;
     width = height / ratio;
   }
 
   return {
-    left: frameRect.left + (frameRect.width - width) / 2,
-    top: frameRect.top + (frameRect.height - height) / 2,
+    left: stageRect.left + (stageRect.width - width) / 2,
+    top: stageRect.top + (stageRect.height - height) / 2,
     width,
     height,
   };

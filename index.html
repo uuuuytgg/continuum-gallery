@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Continuum Gallery</title>
-    <link rel="stylesheet" href="styles.css?v=20260526-gallery-atelier2" />
+    <link rel="stylesheet" href="styles.css?v=20260526-viewer-pro" />
     <script async defer src="https://accounts.google.com/gsi/client"></script>
-    <script defer src="app.js?v=20260526-gallery-atelier2"></script>
+    <script defer src="app.js?v=20260526-viewer-pro"></script>
   </head>
   <body data-mode="waterfall">
     <div class="app" id="app">
@@ -76,8 +76,15 @@
 
       <section class="viewer" id="viewer" aria-hidden="true" aria-label="单图观赏">
         <button class="viewer-close" id="viewerClose" type="button" aria-label="关闭单图观赏" title="关闭">×</button>
-        <figure class="viewer-frame">
-          <img id="viewerImage" alt="" />
+        <div class="viewer-tools" aria-label="Image zoom controls">
+          <button id="viewerZoomOut" type="button" aria-label="Zoom out" title="Zoom out">-</button>
+          <button id="viewerZoomReset" type="button" aria-label="Reset zoom" title="Reset zoom">100%</button>
+          <button id="viewerZoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+        </div>
+        <figure class="viewer-frame" id="viewerFrame">
+          <div class="viewer-image-stage" id="viewerImageStage">
+            <img id="viewerImage" alt="" />
+          </div>
           <figcaption>
             <strong id="viewerTitle"></strong>
             <span id="viewerMeta"></span>
