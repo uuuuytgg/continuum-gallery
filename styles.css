@@ -1,14 +1,15 @@
 :root {
   color-scheme: dark;
-  --bg: #15120f;
-  --ink: #f7f1e8;
-  --muted: rgba(247, 241, 232, 0.68);
-  --panel: rgba(27, 24, 20, 0.72);
-  --line: rgba(247, 241, 232, 0.16);
-  --amber: #d9ad38;
-  --coral: #de5f4f;
-  --teal: #35a69a;
-  --violet: #8f75d9;
+  --bg: #06080d;
+  --ink: #eef7ff;
+  --muted: rgba(225, 242, 255, 0.66);
+  --panel: rgba(7, 11, 18, 0.64);
+  --line: rgba(155, 220, 255, 0.19);
+  --amber: #ffc451;
+  --coral: #ff6b7a;
+  --teal: #40e8c1;
+  --violet: #8a78ff;
+  --blue: #5bceff;
   --ease: cubic-bezier(0.2, 0.82, 0.18, 1);
 }
 
@@ -26,14 +27,40 @@ body {
 body {
   overflow: hidden;
   background:
-    radial-gradient(circle at 16% 12%, rgba(217, 173, 56, 0.14), transparent 30%),
-    radial-gradient(circle at 84% 20%, rgba(53, 166, 154, 0.16), transparent 28%),
-    linear-gradient(140deg, #19140f 0%, #101010 46%, #1b1511 100%);
+    linear-gradient(112deg, rgba(64, 232, 193, 0.08), transparent 32%),
+    linear-gradient(248deg, rgba(138, 120, 255, 0.1), transparent 38%),
+    linear-gradient(180deg, #05070d 0%, #090c16 44%, #05070b 100%);
   color: var(--ink);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(rgba(91, 206, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 232, 193, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, transparent, rgba(91, 206, 255, 0.08), transparent),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 4px);
+  opacity: 0.5;
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 button {
@@ -66,9 +93,12 @@ button {
 .bottom-bar,
 .viewer-close {
   border: 1px solid var(--line);
-  background: rgba(20, 18, 15, 0.58);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(18px);
+  background: linear-gradient(135deg, rgba(11, 18, 30, 0.68), rgba(5, 8, 14, 0.46));
+  box-shadow:
+    0 18px 52px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 32px rgba(91, 206, 255, 0.08);
+  backdrop-filter: blur(22px) saturate(1.18);
 }
 
 .brand {
@@ -108,8 +138,10 @@ button {
   flex: 0 0 auto;
   border-radius: 50%;
   background:
-    conic-gradient(from 40deg, var(--amber), var(--coral), var(--teal), var(--violet), var(--amber));
-  box-shadow: inset 0 0 0 6px rgba(21, 18, 15, 0.38);
+    conic-gradient(from 40deg, var(--blue), var(--teal), var(--amber), var(--violet), var(--blue));
+  box-shadow:
+    inset 0 0 0 6px rgba(6, 8, 13, 0.44),
+    0 0 24px rgba(91, 206, 255, 0.34);
 }
 
 .icon-button {
@@ -201,14 +233,16 @@ body.is-dragging .stage {
   display: block;
   overflow: hidden;
   padding: 0;
-  border: 1px solid rgba(247, 241, 232, 0.14);
+  border: 1px solid rgba(140, 220, 255, 0.22);
   border-radius: 8px;
-  background: #2b241e;
+  background: #09101a;
   color: var(--ink);
   cursor: pointer;
   outline: none;
   transform-origin: 0 0;
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.26);
+  box-shadow:
+    0 22px 64px rgba(0, 0, 0, 0.36),
+    0 0 34px rgba(64, 232, 193, 0.08);
   will-change: transform, width, height, opacity, filter, border-radius;
 }
 
@@ -237,6 +271,7 @@ body.is-switching .photo-card,
   object-fit: cover;
   pointer-events: none;
   user-select: none;
+  filter: saturate(1.06) contrast(1.04);
 }
 
 .caption {
@@ -249,7 +284,8 @@ body.is-switching .photo-card,
   justify-content: space-between;
   gap: 10px;
   padding: 38px 14px 12px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent);
+  background:
+    linear-gradient(to top, rgba(2, 8, 14, 0.86), rgba(2, 8, 14, 0.18), transparent);
   text-align: left;
   pointer-events: none;
 }
@@ -277,8 +313,9 @@ body[data-mode="waterfall"] .photo-card:hover {
 body[data-mode="orbit"] .photo-card {
   border-radius: 50%;
   box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.11);
+    0 18px 54px rgba(0, 0, 0, 0.34),
+    0 0 26px rgba(91, 206, 255, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
 
 body[data-mode="orbit"] .photo-card::after,
@@ -288,8 +325,8 @@ body[data-mode="sphere"] .photo-card::after {
   inset: 0;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.28), transparent 26%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent 52%);
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.32), transparent 24%),
+    linear-gradient(to bottom, rgba(91, 206, 255, 0.16), transparent 52%);
   pointer-events: none;
 }
 
@@ -312,10 +349,11 @@ body[data-mode="orbit"] .caption span {
 
 body[data-mode="sphere"] .photo-card {
   border-radius: 50%;
-  border-color: rgba(247, 241, 232, 0.2);
+  border-color: rgba(145, 219, 255, 0.42);
   box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.28),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 10px 32px rgba(0, 0, 0, 0.34),
+    0 0 22px rgba(64, 232, 193, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 body[data-mode="sphere"] .caption {
@@ -328,13 +366,17 @@ body[data-mode="sphere"] .caption {
   z-index: 0;
   width: 100%;
   height: 100%;
-  opacity: 0;
+  opacity: 0.42;
   pointer-events: none;
   transition: opacity 620ms ease;
 }
 
 body[data-mode="sphere"] .grain-canvas {
-  opacity: 0.78;
+  opacity: 0.92;
+}
+
+body[data-mode="orbit"] .grain-canvas {
+  opacity: 0.58;
 }
 
 .mode-toast {
@@ -345,7 +387,7 @@ body[data-mode="sphere"] .grain-canvas {
   padding: 10px 14px;
   border: 1px solid rgba(247, 241, 232, 0.18);
   border-radius: 8px;
-  background: rgba(20, 18, 15, 0.62);
+  background: rgba(5, 9, 16, 0.72);
   color: rgba(247, 241, 232, 0.88);
   opacity: 0;
   pointer-events: none;
@@ -403,7 +445,8 @@ body[data-mode="sphere"] .grain-canvas {
 }
 
 .segmented button[aria-pressed="true"] {
-  background: rgba(247, 241, 232, 0.14);
+  background: rgba(91, 206, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(91, 206, 255, 0.16);
 }
 
 .segmented button span:last-child {
@@ -474,8 +517,8 @@ body[data-mode="sphere"] .grain-canvas {
   flex: 0 0 auto;
   padding: 0 15px;
   background:
-    linear-gradient(135deg, rgba(222, 95, 79, 0.92), rgba(217, 173, 56, 0.9));
-  color: #17120f;
+    linear-gradient(135deg, rgba(91, 206, 255, 0.95), rgba(64, 232, 193, 0.92));
+  color: #041016;
   font-size: 13px;
   font-weight: 800;
 }
@@ -496,7 +539,7 @@ body[data-mode="sphere"] .grain-canvas {
 }
 
 .viewer.is-open {
-  background: rgba(10, 9, 8, 0.84);
+  background: rgba(2, 5, 10, 0.88);
   opacity: 1;
   pointer-events: auto;
 }
@@ -515,7 +558,9 @@ body[data-mode="sphere"] .grain-canvas {
   max-height: 100%;
   border-radius: 8px;
   object-fit: contain;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.46);
+  box-shadow:
+    0 34px 100px rgba(0, 0, 0, 0.5),
+    0 0 44px rgba(91, 206, 255, 0.12);
   opacity: 0;
   transition: opacity 220ms ease;
 }
