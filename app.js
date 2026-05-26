@@ -196,15 +196,6 @@ function makeArtwork(index, ratio) {
     ctx.fillRect((i * 31) % width, (i * 67) % height, 1, 1);
   }
 
-  const plateWidth = Math.min(180, width * 0.38);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-  ctx.fillRect(22, height - 62, plateWidth, 34);
-  ctx.strokeStyle = `rgba(${palette[0]}, 0.18)`;
-  ctx.strokeRect(22.5, height - 61.5, plateWidth, 33);
-  ctx.fillStyle = "rgba(247, 244, 237, 0.78)";
-  ctx.font = "700 18px system-ui, sans-serif";
-  ctx.fillText(`SET ${String(index + 1).padStart(2, "0")}`, 36, height - 39);
-
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
   ctx.lineWidth = 1;
   for (let i = 0; i < 10; i += 1) {
