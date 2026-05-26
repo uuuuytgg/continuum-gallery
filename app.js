@@ -25,6 +25,10 @@ const MODES = ["waterfall", "orbit", "sphere"];
 const GOOGLE_CLIENT_ID_KEY = "continuum-gallery.googleClientId";
 const GOOGLE_PHOTOS_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
 const GOOGLE_PHOTOS_API = "https://photospicker.googleapis.com";
+const PHOTO_DB_NAME = "continuum-gallery.photos";
+const PHOTO_DB_VERSION = 1;
+const PHOTO_STORE_NAME = "albums";
+const ACTIVE_ALBUM_ID = "active-google-photos";
 const MODE_NAMES = {
   waterfall: "瀑布流",
   orbit: "球形滑动",
@@ -94,6 +98,7 @@ function init() {
   resizeCanvas();
   applyLayout({ immediate: true });
   requestAnimationFrame(tick);
+  restorePersistedPhotos();
 
   window.addEventListener("resize", handleResize);
   modeButtons.addEventListener("click", handleModeButton);
@@ -140,11 +145,11 @@ function makeArtwork(index, ratio) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const palette = [
-    ["#051225", "#40e8c1", "#5bceff", "#06080d"],
-    ["#0b1026", "#8a78ff", "#40e8c1", "#05070d"],
-    ["#0a0d19", "#ff6b7a", "#5bceff", "#05070d"],
-    ["#061018", "#ffc451", "#40e8c1", "#06080d"],
-    ["#070a16", "#5bceff", "#8a78ff", "#05070d"],
+    ["#06070a", "#d8ff63", "#7ee7ff", "#111318"],
+    ["#08070b", "#f05aa2", "#d8ff63", "#101116"],
+    ["#05080d", "#7ee7ff", "#9d8cff", "#111318"],
+    ["#080a08", "#e9e3d2", "#d8ff63", "#101116"],
+    ["#07070b", "#9d8cff", "#7ee7ff", "#111318"],
   ][index % 5];
 
   canvas.width = width;
@@ -260,6 +265,7 @@ function createPhotoCard(item, index) {
 function replacePhotoItems(newItems) {
   if (!newItems.length) return;
   const fragment = document.createDocumentFragment();
+  releaseDisplayedObjectUrls();
   cards.length = 0;
   items.length = 0;
   gallery.replaceChildren();
@@ -280,6 +286,35 @@ function replacePhotoItems(newItems) {
   } else {
     setMode("orbit", { focusIndex: 0 });
   }
+}
+
+function restorePhotoItems(newItems) {
+  if (!newItems.length) return;
+  const fragment = document.createDocumentFragment();
+  releaseDisplayedObjectUrls();
+  cards.length = 0;
+  items.length = 0;
+  gallery.replaceChildren();
+
+  newItems.forEach((item, index) => {
+    items.push(item);
+    const card = createPhotoCard(item, index);
+    cards.push(card);
+    fragment.appendChild(card);
+  });
+
+  gallery.appendChild(fragment);
+  buildSpherePoints();
+  state.selected = 0;
+  applyLayout({ immediate: true });
+}
+
+function releaseDisplayedObjectUrls() {
+  items.forEach((item) => {
+    if (item.source !== "demo" && typeof item.src === "string" && item.src.startsWith("blob:")) {
+      URL.revokeObjectURL(item.src);
+    }
+  });
 }
 
 function buildSpherePoints() {
@@ -421,6 +456,7 @@ async function startGooglePhotosImport() {
       return;
     }
 
+    await savePersistedPhotos(importedItems);
     replacePhotoItems(importedItems);
     closePhotosPanel();
     showToast(`Google Photos +${importedItems.length}`);
@@ -539,10 +575,12 @@ async function materializeGooglePhotosItems(pickedItems) {
       const objectUrl = URL.createObjectURL(blob);
       state.google.objectUrls.push(objectUrl);
       imported.push({
+        id: item.id || `${Date.now()}-${index}`,
         title: cleanFilename(file.filename || `Google Photo ${index + 1}`),
         place: "Google Photos",
         ratio: height / width,
         source: "google",
+        blob,
         src: objectUrl,
       });
     } catch (error) {
@@ -556,6 +594,98 @@ async function materializeGooglePhotosItems(pickedItems) {
 async function deleteGooglePhotosSession(sessionId) {
   return googlePhotosJson(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",
+  });
+}
+
+async function restorePersistedPhotos() {
+  try {
+    const records = await loadPersistedPhotos();
+    if (!records.length) return;
+
+    const restored = records.map((record, index) => {
+      const src = URL.createObjectURL(record.blob);
+      return {
+        id: record.id || `restored-${index}`,
+        title: record.title || `Google Photo ${index + 1}`,
+        place: record.place || "Google Photos",
+        ratio: record.ratio || 1,
+        source: "google",
+        blob: record.blob,
+        src,
+      };
+    });
+
+    restorePhotoItems(restored);
+    setGoogleStatus(`Restored ${restored.length} photos`);
+  } catch (error) {
+    console.warn("Could not restore persisted photos", error);
+  }
+}
+
+async function savePersistedPhotos(photoItems) {
+  if (!("indexedDB" in window)) return;
+  const records = photoItems
+    .filter((item) => item.blob instanceof Blob)
+    .map((item, index) => ({
+      id: item.id || `photo-${index}`,
+      title: item.title,
+      place: item.place,
+      ratio: item.ratio,
+      source: item.source,
+      blob: item.blob,
+    }));
+
+  if (!records.length) return;
+  const db = await openPhotoDb();
+  await writePhotoDb(db, (store) => {
+    store.put({
+      id: ACTIVE_ALBUM_ID,
+      updatedAt: Date.now(),
+      photos: records,
+    });
+  });
+  db.close();
+}
+
+async function loadPersistedPhotos() {
+  if (!("indexedDB" in window)) return [];
+  const db = await openPhotoDb();
+  const album = await readPhotoDb(db, (store) => store.get(ACTIVE_ALBUM_ID));
+  db.close();
+  return album?.photos || [];
+}
+
+function openPhotoDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(PHOTO_DB_NAME, PHOTO_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE_NAME)) {
+        db.createObjectStore(PHOTO_STORE_NAME, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function readPhotoDb(db, action) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(PHOTO_STORE_NAME, "readonly");
+    const store = transaction.objectStore(PHOTO_STORE_NAME);
+    const request = action(store);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function writePhotoDb(db, action) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(PHOTO_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(PHOTO_STORE_NAME);
+    action(store);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
@@ -1005,21 +1135,21 @@ function drawParticleField(now) {
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.34;
   const palette = [
-    "91, 206, 255",
-    "138, 120, 255",
-    "64, 232, 193",
-    "255, 192, 76",
+    "126, 231, 255",
+    "216, 255, 99",
+    "240, 90, 162",
+    "157, 140, 255",
   ];
 
-  for (let lane = 0; lane < 9; lane += 1) {
-    const y = height * (0.08 + lane * 0.115);
-    const shift = (now * 0.012 * (lane + 1)) % (width + 240);
-    const alpha = state.mode === "sphere" ? 0.12 : 0.055;
+  for (let lane = 0; lane < 6; lane += 1) {
+    const y = height * (0.14 + lane * 0.14);
+    const shift = (now * 0.006 * (lane + 1)) % (width + 300);
+    const alpha = state.mode === "sphere" ? 0.08 : 0.034;
     grainCtx.strokeStyle = `rgba(${palette[lane % palette.length]}, ${alpha})`;
     grainCtx.lineWidth = 1;
     grainCtx.beginPath();
-    grainCtx.moveTo(-220 + shift, y);
-    grainCtx.lineTo(width + shift, y + Math.sin(now * 0.0005 + lane) * 44);
+    grainCtx.moveTo(-260 + shift, y);
+    grainCtx.lineTo(width + shift, y + Math.sin(now * 0.00036 + lane) * 24);
     grainCtx.stroke();
   }
 
@@ -1036,7 +1166,7 @@ function drawParticleField(now) {
     const y = state.mode === "sphere"
       ? cy + Math.sin(angle) * r * 0.72 + band * radius * 0.32
       : cy + laneOffset + Math.sin(angle * 1.8) * 38;
-    const alpha = state.mode === "sphere" ? 0.09 + Math.abs(band) * 0.13 : 0.075;
+    const alpha = state.mode === "sphere" ? 0.075 + Math.abs(band) * 0.11 : 0.045;
     grainCtx.fillStyle = `rgba(${palette[particle.tone]}, ${alpha})`;
     grainCtx.beginPath();
     grainCtx.arc(x, y, particle.size, 0, Math.PI * 2);
