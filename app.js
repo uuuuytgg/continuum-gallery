@@ -126,6 +126,7 @@ function createItems() {
       title: titles[index % titles.length],
       place: places[index % places.length],
       ratio,
+      source: "demo",
       src: makeArtwork(index, ratio),
     };
   });
@@ -139,11 +140,11 @@ function makeArtwork(index, ratio) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const palette = [
-    ["#dd5b4c", "#e0b747", "#266f78", "#14110e"],
-    ["#2c9f93", "#f2d36a", "#7d4cc2", "#17130f"],
-    ["#d64b78", "#f09a5a", "#285c8f", "#100f10"],
-    ["#76b7b2", "#f3c84b", "#df6a4f", "#1b1713"],
-    ["#4267ac", "#d5b345", "#43a47b", "#151515"],
+    ["#051225", "#40e8c1", "#5bceff", "#06080d"],
+    ["#0b1026", "#8a78ff", "#40e8c1", "#05070d"],
+    ["#0a0d19", "#ff6b7a", "#5bceff", "#05070d"],
+    ["#061018", "#ffc451", "#40e8c1", "#06080d"],
+    ["#070a16", "#5bceff", "#8a78ff", "#05070d"],
   ][index % 5];
 
   canvas.width = width;
@@ -208,6 +209,16 @@ function makeArtwork(index, ratio) {
   ctx.font = "700 52px system-ui, sans-serif";
   ctx.fillText(String(index + 1).padStart(2, "0"), 28, height - 34);
 
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 10; i += 1) {
+    const y = height * (0.12 + i * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y + Math.sin(index + i) * 22);
+    ctx.stroke();
+  }
+
   return canvas.toDataURL("image/jpeg", 0.86);
 }
 
@@ -246,13 +257,14 @@ function createPhotoCard(item, index) {
   return card;
 }
 
-function appendPhotoItems(newItems) {
+function replacePhotoItems(newItems) {
   if (!newItems.length) return;
-  const startIndex = items.length;
   const fragment = document.createDocumentFragment();
+  cards.length = 0;
+  items.length = 0;
+  gallery.replaceChildren();
 
-  newItems.forEach((item, offset) => {
-    const index = startIndex + offset;
+  newItems.forEach((item, index) => {
     items.push(item);
     const card = createPhotoCard(item, index);
     cards.push(card);
@@ -261,12 +273,12 @@ function appendPhotoItems(newItems) {
 
   gallery.appendChild(fragment);
   buildSpherePoints();
-  state.selected = startIndex;
+  state.selected = 0;
   if (state.mode === "orbit") {
-    centerOrbitOn(startIndex);
+    centerOrbitOn(0);
     applyLayout({ immediate: false });
   } else {
-    setMode("orbit", { focusIndex: startIndex });
+    setMode("orbit", { focusIndex: 0 });
   }
 }
 
@@ -296,6 +308,8 @@ function buildSpherePoints() {
     r: 0.15 + ((index * 17) % 100) / 100,
     drift: 0.35 + ((index * 7) % 100) / 180,
     size: 0.75 + ((index * 13) % 8) / 10,
+    lane: index % 9,
+    tone: index % 4,
   }));
 }
 
@@ -407,7 +421,7 @@ async function startGooglePhotosImport() {
       return;
     }
 
-    appendPhotoItems(importedItems);
+    replacePhotoItems(importedItems);
     closePhotosPanel();
     showToast(`Google Photos +${importedItems.length}`);
     setGoogleStatus(`Imported ${importedItems.length}`);
@@ -507,7 +521,9 @@ async function listGooglePhotosItems(sessionId) {
 }
 
 async function materializeGooglePhotosItems(pickedItems) {
-  const photos = pickedItems.filter((item) => item.type === "PHOTO" && item.mediaFile?.baseUrl);
+  const photos = pickedItems
+    .filter((item) => item.type === "PHOTO" && item.mediaFile?.baseUrl)
+    .reverse();
   const imported = [];
 
   for (let index = 0; index < photos.length; index += 1) {
@@ -526,6 +542,7 @@ async function materializeGooglePhotosItems(pickedItems) {
         title: cleanFilename(file.filename || `Google Photo ${index + 1}`),
         place: "Google Photos",
         ratio: height / width,
+        source: "google",
         src: objectUrl,
       });
     } catch (error) {
@@ -970,15 +987,15 @@ function tick() {
       state.sphere.radiusBoost *= 0.94;
       applySphereLayout();
     }
-    drawGrain(now);
+    drawParticleField(now);
   } else {
-    clearGrain();
+    drawParticleField(now);
   }
 
   requestAnimationFrame(tick);
 }
 
-function drawGrain(now) {
+function drawParticleField(now) {
   const width = window.innerWidth;
   const height = window.innerHeight;
   grainCtx.clearRect(0, 0, width, height);
@@ -987,19 +1004,54 @@ function drawGrain(now) {
   const cx = width / 2;
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.34;
+  const palette = [
+    "91, 206, 255",
+    "138, 120, 255",
+    "64, 232, 193",
+    "255, 192, 76",
+  ];
+
+  for (let lane = 0; lane < 9; lane += 1) {
+    const y = height * (0.08 + lane * 0.115);
+    const shift = (now * 0.012 * (lane + 1)) % (width + 240);
+    const alpha = state.mode === "sphere" ? 0.12 : 0.055;
+    grainCtx.strokeStyle = `rgba(${palette[lane % palette.length]}, ${alpha})`;
+    grainCtx.lineWidth = 1;
+    grainCtx.beginPath();
+    grainCtx.moveTo(-220 + shift, y);
+    grainCtx.lineTo(width + shift, y + Math.sin(now * 0.0005 + lane) * 44);
+    grainCtx.stroke();
+  }
 
   for (const particle of grainParticles) {
     const wobble = Math.sin(now * 0.0012 * particle.drift + particle.a) * 0.055;
-    const angle = particle.a + state.sphere.rotY * 0.8 + wobble;
+    const modeDrift = state.mode === "sphere" ? state.sphere.rotY * 0.8 : now * 0.00008;
+    const angle = particle.a + modeDrift + wobble;
     const band = Math.sin(particle.a * 1.7 + state.sphere.rotX);
-    const r = radius * particle.r * (0.74 + Math.abs(band) * 0.34);
-    const x = cx + Math.cos(angle) * r;
-    const y = cy + Math.sin(angle) * r * 0.72 + band * radius * 0.32;
-    const alpha = 0.09 + Math.abs(band) * 0.12;
-    grainCtx.fillStyle = `rgba(246, 225, 183, ${alpha})`;
+    const laneOffset = (particle.lane - 4) * height * 0.052;
+    const r = radius * particle.r * (state.mode === "sphere" ? 0.74 + Math.abs(band) * 0.34 : 1.32);
+    const x = state.mode === "sphere"
+      ? cx + Math.cos(angle) * r
+      : (Math.cos(angle) * r + cx + now * particle.drift * 0.018) % (width + 160) - 80;
+    const y = state.mode === "sphere"
+      ? cy + Math.sin(angle) * r * 0.72 + band * radius * 0.32
+      : cy + laneOffset + Math.sin(angle * 1.8) * 38;
+    const alpha = state.mode === "sphere" ? 0.09 + Math.abs(band) * 0.13 : 0.075;
+    grainCtx.fillStyle = `rgba(${palette[particle.tone]}, ${alpha})`;
     grainCtx.beginPath();
     grainCtx.arc(x, y, particle.size, 0, Math.PI * 2);
     grainCtx.fill();
+  }
+
+  if (state.mode === "sphere") {
+    for (let ring = 0; ring < 4; ring += 1) {
+      const ringRadius = radius * (0.74 + ring * 0.1 + Math.sin(now * 0.001 + ring) * 0.012);
+      grainCtx.strokeStyle = `rgba(${palette[ring]}, ${0.09 - ring * 0.012})`;
+      grainCtx.lineWidth = 1.2;
+      grainCtx.beginPath();
+      grainCtx.ellipse(cx, cy, ringRadius, ringRadius * (0.28 + ring * 0.08), state.sphere.rotY + ring * 0.7, 0, Math.PI * 2);
+      grainCtx.stroke();
+    }
   }
   grainCtx.restore();
 }
