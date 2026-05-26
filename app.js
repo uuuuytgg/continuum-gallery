@@ -145,74 +145,65 @@ function makeArtwork(index, ratio) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const palette = [
-    ["#06070a", "#d8ff63", "#7ee7ff", "#111318"],
-    ["#08070b", "#f05aa2", "#d8ff63", "#101116"],
-    ["#05080d", "#7ee7ff", "#9d8cff", "#111318"],
-    ["#080a08", "#e9e3d2", "#d8ff63", "#101116"],
-    ["#07070b", "#9d8cff", "#7ee7ff", "#111318"],
+    ["126, 231, 255", "216, 255, 99", "14, 16, 18"],
+    ["240, 90, 162", "216, 255, 99", "12, 12, 16"],
+    ["157, 140, 255", "126, 231, 255", "10, 13, 18"],
+    ["233, 227, 210", "216, 255, 99", "13, 14, 12"],
+    ["126, 231, 255", "157, 140, 255", "10, 10, 15"],
   ][index % 5];
 
   canvas.width = width;
   canvas.height = height;
 
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, palette[0]);
-  gradient.addColorStop(0.42, palette[1]);
-  gradient.addColorStop(0.76, palette[2]);
-  gradient.addColorStop(1, palette[3]);
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = `rgb(${palette[2]})`;
   ctx.fillRect(0, 0, width, height);
 
-  const glow = ctx.createRadialGradient(
-    width * (0.25 + ((index * 17) % 45) / 100),
-    height * (0.18 + ((index * 11) % 42) / 100),
-    12,
-    width * 0.5,
-    height * 0.38,
-    width * 0.72,
-  );
-  glow.addColorStop(0, "rgba(255,255,255,0.48)");
-  glow.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = glow;
+  const baseGlow = ctx.createLinearGradient(0, 0, width, height);
+  baseGlow.addColorStop(0, `rgba(${palette[0]}, 0.34)`);
+  baseGlow.addColorStop(0.38, "rgba(255, 255, 255, 0.04)");
+  baseGlow.addColorStop(0.68, `rgba(${palette[1]}, 0.22)`);
+  baseGlow.addColorStop(1, "rgba(0, 0, 0, 0.58)");
+  ctx.fillStyle = baseGlow;
   ctx.fillRect(0, 0, width, height);
-
-  ctx.globalCompositeOperation = "multiply";
-  for (let i = 0; i < 9; i += 1) {
-    ctx.fillStyle = `rgba(12, 10, 8, ${0.08 + i * 0.012})`;
-    ctx.beginPath();
-    const y = height * (0.58 + i * 0.055);
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= width + 40; x += 40) {
-      const wave = Math.sin((x * 0.018) + index + i) * (22 + i * 4);
-      ctx.lineTo(x, y + wave);
-    }
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-  }
 
   ctx.globalCompositeOperation = "screen";
-  for (let i = 0; i < 18; i += 1) {
-    const x = ((index * 97 + i * 71) % width);
-    const y = ((index * 53 + i * 89) % height);
-    const radius = 16 + ((index + i * 5) % 52);
-    ctx.fillStyle = `rgba(255,255,255,${0.025 + (i % 4) * 0.018})`;
+  for (let layer = 0; layer < 7; layer += 1) {
+    const y = height * (0.16 + layer * 0.12);
+    const alpha = 0.08 - layer * 0.006;
+    ctx.strokeStyle = `rgba(${layer % 2 ? palette[1] : palette[0]}, ${alpha})`;
+    ctx.lineWidth = 1 + layer * 0.24;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(-30, y);
+    for (let x = -30; x <= width + 30; x += 28) {
+      const wave = Math.sin(index * 0.7 + layer + x * 0.017) * (16 + layer * 3);
+      ctx.lineTo(x, y + wave);
+    }
+    ctx.stroke();
   }
 
   ctx.globalCompositeOperation = "source-over";
-  for (let i = 0; i < 1600; i += 1) {
-    const shade = 180 + ((i + index * 19) % 70);
-    ctx.fillStyle = `rgba(${shade}, ${shade - 10}, ${shade - 26}, 0.045)`;
-    ctx.fillRect((i * 37) % width, (i * 61) % height, 1, 1);
+  for (let i = 0; i < 16; i += 1) {
+    const x = ((index * 73 + i * 47) % width);
+    const bandWidth = 1 + i % 3;
+    ctx.fillStyle = `rgba(${i % 2 ? palette[1] : palette[0]}, ${0.035 + (i % 4) * 0.012})`;
+    ctx.fillRect(x, 0, bandWidth, height);
   }
 
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
-  ctx.font = "700 52px system-ui, sans-serif";
-  ctx.fillText(String(index + 1).padStart(2, "0"), 28, height - 34);
+  for (let i = 0; i < 2200; i += 1) {
+    const tone = 140 + ((i + index * 19) % 96);
+    const alpha = i % 11 === 0 ? 0.09 : 0.035;
+    ctx.fillStyle = `rgba(${tone}, ${tone}, ${tone}, ${alpha})`;
+    ctx.fillRect((i * 31) % width, (i * 67) % height, 1, 1);
+  }
+
+  const plateWidth = Math.min(180, width * 0.38);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+  ctx.fillRect(22, height - 62, plateWidth, 34);
+  ctx.strokeStyle = `rgba(${palette[0]}, 0.18)`;
+  ctx.strokeRect(22.5, height - 61.5, plateWidth, 33);
+  ctx.fillStyle = "rgba(247, 244, 237, 0.78)";
+  ctx.font = "700 18px system-ui, sans-serif";
+  ctx.fillText(`SET ${String(index + 1).padStart(2, "0")}`, 36, height - 39);
 
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
   ctx.lineWidth = 1;
