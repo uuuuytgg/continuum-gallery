@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Continuum Gallery</title>
-    <link rel="stylesheet" href="styles.css?v=20260526-perf3" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css?v=20260606-monet-klein-v1" />
     <script async defer src="https://accounts.google.com/gsi/client"></script>
-    <script defer src="app.js?v=20260526-perf3"></script>
+    <script defer src="app.js?v=20260606-monet-klein-v1"></script>
   </head>
   <body data-mode="waterfall">
     <div class="app" id="app">
@@ -23,6 +24,9 @@
             <span aria-hidden="true">G</span>
             <strong>Photos</strong>
           </button>
+          <button class="icon-button gesture-button" id="gestureButton" type="button" aria-label="启用手势切换" title="手势切换">
+            <span aria-hidden="true">手</span>
+          </button>
           <button class="icon-button" id="focusButton" type="button" aria-label="聚焦当前照片" title="聚焦">
             <span aria-hidden="true">◎</span>
           </button>
@@ -30,7 +34,9 @@
       </header>
 
       <main class="stage" id="stage" tabindex="0" aria-label="图片展示区">
+        <canvas class="particle-canvas" id="particleCanvas" aria-hidden="true"></canvas>
         <canvas class="grain-canvas" id="grainCanvas" aria-hidden="true"></canvas>
+        <video class="gesture-video" id="gestureVideo" playsinline muted aria-hidden="true"></video>
         <div class="gallery" id="gallery"></div>
         <div class="mode-toast" id="modeToast">瀑布流</div>
       </main>

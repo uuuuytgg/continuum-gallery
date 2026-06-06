@@ -1,13 +1,22 @@
 const stage = document.getElementById("stage");
 const gallery = document.getElementById("gallery");
+const particleCanvas = document.getElementById("particleCanvas");
 const grainCanvas = document.getElementById("grainCanvas");
 const grainCtx = grainCanvas.getContext("2d");
+const particleGl = particleCanvas.getContext("webgl", {
+  alpha: true,
+  antialias: true,
+  depth: false,
+  premultipliedAlpha: false,
+});
 const modeButtons = document.getElementById("modeButtons");
 const modeLabel = document.getElementById("modeLabel");
 const modeToast = document.getElementById("modeToast");
 const immersiveButton = document.getElementById("immersiveButton");
 const focusButton = document.getElementById("focusButton");
 const googleButton = document.getElementById("googleButton");
+const gestureButton = document.getElementById("gestureButton");
+const gestureVideo = document.getElementById("gestureVideo");
 const photosPanel = document.getElementById("photosPanel");
 const photosPanelClose = document.getElementById("photosPanelClose");
 const googleClientIdInput = document.getElementById("googleClientId");
@@ -34,6 +43,12 @@ const PHOTO_DB_NAME = "continuum-gallery.photos";
 const PHOTO_DB_VERSION = 1;
 const PHOTO_STORE_NAME = "albums";
 const ACTIVE_ALBUM_ID = "active-google-photos";
+const SACRED_PARTICLE_COUNT = 1480;
+const WEBGL_PARTICLE_COUNT = 18000;
+const MEDIAPIPE_TASKS_VERSION = "0.10.35";
+const GESTURE_STABLE_FRAMES = 7;
+const GESTURE_SWITCH_COOLDOWN = 1350;
+const GESTURE_DRAG_SCALE = 1.45;
 const MODE_NAMES = {
   waterfall: "瀑布流",
   orbit: "球形滑动",
@@ -77,6 +92,11 @@ const state = {
     y: 0,
     vx: 0,
     vy: 0,
+    fieldX: 0,
+    fieldY: 0,
+    fieldVx: 0,
+    fieldVy: 0,
+    fieldEnergy: 0,
   },
   sphere: {
     rotX: -0.22,
@@ -92,6 +112,31 @@ const state = {
     isImporting: false,
     objectUrls: [],
   },
+  particleTransition: {
+    fromMode: "waterfall",
+    toMode: "waterfall",
+    startedAt: 0,
+    duration: 980,
+  },
+  gesture: {
+    active: false,
+    loading: false,
+    stream: null,
+    landmarker: null,
+    raf: 0,
+    lastVideoTime: -1,
+    lastCenterX: null,
+    anchorX: null,
+    lastSwitchAt: -GESTURE_SWITCH_COOLDOWN,
+    stableGesture: "open",
+    stableFrames: 0,
+    commandReady: true,
+    neutralFrames: 0,
+    dragActive: false,
+    dragX: 0,
+    dragY: 0,
+    lastAction: "none",
+  },
 };
 
 const items = createItems();
@@ -100,6 +145,7 @@ const cardLayouts = new WeakMap();
 let spherePoints = [];
 let physics = [];
 let grainParticles = [];
+let webglParticles = null;
 let resizeTimer = 0;
 let imageLayoutTimer = 0;
 
@@ -110,6 +156,7 @@ function init() {
   setGoogleStatus(googleClientIdInput.value ? "Client ID ready" : "Add Client ID");
   renderCards();
   buildSpherePoints();
+  initWebglParticles();
   resizeCanvas();
   applyLayout({ immediate: true });
   requestAnimationFrame(tick);
@@ -120,6 +167,7 @@ function init() {
   immersiveButton.addEventListener("click", handleImmersive);
   focusButton.addEventListener("click", () => openViewer(state.selected));
   googleButton.addEventListener("click", openPhotosPanel);
+  gestureButton.addEventListener("click", toggleGestureControl);
   photosPanelClose.addEventListener("click", closePhotosPanel);
   saveClientButton.addEventListener("click", saveGoogleClientId);
   importPhotosButton.addEventListener("click", startGooglePhotosImport);
@@ -181,11 +229,11 @@ function makeArtwork(index, ratio) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const palette = [
-    ["126, 231, 255", "216, 255, 99", "14, 16, 18"],
-    ["240, 90, 162", "216, 255, 99", "12, 12, 16"],
-    ["157, 140, 255", "126, 231, 255", "10, 13, 18"],
-    ["233, 227, 210", "216, 255, 99", "13, 14, 12"],
-    ["126, 231, 255", "157, 140, 255", "10, 10, 15"],
+    ["58, 185, 255", "212, 247, 255", "7, 16, 31"],
+    ["72, 132, 255", "158, 229, 255", "8, 13, 32"],
+    ["121, 221, 255", "236, 252, 255", "5, 21, 37"],
+    ["36, 104, 220", "180, 241, 255", "8, 12, 25"],
+    ["91, 202, 255", "146, 170, 255", "6, 17, 34"],
   ][index % 5];
 
   canvas.width = width;
@@ -205,7 +253,7 @@ function makeArtwork(index, ratio) {
   ctx.globalCompositeOperation = "screen";
   for (let layer = 0; layer < 7; layer += 1) {
     const y = height * (0.16 + layer * 0.12);
-    const alpha = 0.08 - layer * 0.006;
+    const alpha = 0.12 - layer * 0.008;
     ctx.strokeStyle = `rgba(${layer % 2 ? palette[1] : palette[0]}, ${alpha})`;
     ctx.lineWidth = 1 + layer * 0.24;
     ctx.beginPath();
@@ -221,7 +269,7 @@ function makeArtwork(index, ratio) {
   for (let i = 0; i < 16; i += 1) {
     const x = ((index * 73 + i * 47) % width);
     const bandWidth = 1 + i % 3;
-    ctx.fillStyle = `rgba(${i % 2 ? palette[1] : palette[0]}, ${0.035 + (i % 4) * 0.012})`;
+    ctx.fillStyle = `rgba(${i % 2 ? palette[1] : palette[0]}, ${0.055 + (i % 4) * 0.015})`;
     ctx.fillRect(x, 0, bandWidth, height);
   }
 
@@ -232,7 +280,7 @@ function makeArtwork(index, ratio) {
     ctx.fillRect((i * 31) % width, (i * 67) % height, 1, 1);
   }
 
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.strokeStyle = "rgba(220,248,255,0.2)";
   ctx.lineWidth = 1;
   for (let i = 0; i < 10; i += 1) {
     const y = height * (0.12 + i * 0.075);
@@ -379,14 +427,233 @@ function buildSpherePoints() {
     size: 36,
   }));
 
-  grainParticles = Array.from({ length: 170 }, (_, index) => ({
-    a: index * 0.78,
-    r: 0.15 + ((index * 17) % 100) / 100,
-    drift: 0.35 + ((index * 7) % 100) / 180,
-    size: 0.75 + ((index * 13) % 8) / 10,
-    lane: index % 9,
-    tone: index % 4,
-  }));
+  grainParticles = Array.from({ length: SACRED_PARTICLE_COUNT }, (_, index) => makeSacredParticle(index));
+}
+
+function initWebglParticles() {
+  if (!particleGl) return;
+
+  const vertexShader = createParticleShader(particleGl.VERTEX_SHADER, `
+    attribute vec3 a_position;
+    attribute vec2 a_orbit;
+    attribute float a_seed;
+    attribute float a_size;
+    uniform vec2 u_resolution;
+    uniform vec2 u_center;
+    uniform float u_radius;
+    uniform float u_perspective;
+    uniform float u_time;
+    uniform float u_mode;
+    uniform float u_burst;
+    uniform float u_rotX;
+    uniform float u_rotY;
+    uniform vec2 u_pointer;
+    uniform vec2 u_orbitOffset;
+    uniform vec2 u_orbitVelocity;
+    uniform float u_orbitEnergy;
+    uniform float u_orbitScale;
+    varying float v_depth;
+    varying float v_seed;
+    varying float v_alpha;
+
+    mat3 rotateX(float a) {
+      float s = sin(a);
+      float c = cos(a);
+      return mat3(1.0, 0.0, 0.0, 0.0, c, -s, 0.0, s, c);
+    }
+
+    mat3 rotateY(float a) {
+      float s = sin(a);
+      float c = cos(a);
+      return mat3(c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c);
+    }
+
+    void main() {
+      float sphereMix = smoothstep(0.68, 1.0, u_mode);
+      float orbitMix = 1.0 - smoothstep(0.0, 0.22, abs(u_mode - 0.5));
+      vec3 p = a_position;
+      float drift = sin(u_time * (0.32 + a_seed * 0.4) + a_seed * 21.0);
+      vec3 ambient = vec3(
+        p.x * 1.45 + sin(u_time * 0.11 + a_seed * 17.0) * 0.22,
+        p.y * 1.12 + cos(u_time * 0.09 + a_seed * 13.0) * 0.18,
+        p.z * 1.35 + drift * 0.16
+      );
+      vec3 sphere = normalize(p) * (0.82 + 0.16 * sin(a_seed * 33.0 + u_time * 0.5));
+      p = mix(ambient, sphere, sphereMix);
+      float burst = u_burst * (0.35 + a_seed * 0.42);
+      p *= 1.0 + burst;
+      p.xy += vec2(
+        sin(a_seed * 47.0 + u_time * 4.2),
+        cos(a_seed * 39.0 + u_time * 3.7)
+      ) * u_burst * 0.16;
+      p = rotateY(u_rotY + u_time * 0.08 * sphereMix) * rotateX(u_rotX + sin(u_time * 0.13) * 0.07 * sphereMix) * p;
+
+      float persp = u_perspective / (u_perspective - p.z * u_radius);
+      vec2 spherePixel = u_center + p.xy * u_radius * persp;
+      float orbitDepth = 0.28 + fract(a_seed * 9.73) * 0.92;
+      vec2 orbitBase = a_orbit;
+      vec2 flowCoord = orbitBase * vec2(0.72, 1.04);
+      float streamA = sin(flowCoord.x * 1.62 + flowCoord.y * 0.74 + u_time * (0.42 + orbitDepth * 0.2) + a_seed * 17.0);
+      float streamB = cos(flowCoord.y * 1.44 - flowCoord.x * 0.52 + u_time * (0.34 + orbitDepth * 0.16) + a_seed * 23.0);
+      float curl = sin(dot(flowCoord, vec2(1.18, -1.56)) + u_time * 0.52 + a_seed * 39.0);
+      vec2 flow = vec2(streamA + curl * 0.42, streamB - curl * 0.36) * (0.13 + orbitDepth * 0.18);
+      float orbitShape = length(orbitBase / vec2(5.9, 3.7));
+      float wakeBand = smoothstep(1.18, 0.18, length((orbitBase + u_orbitVelocity * 0.42) / vec2(5.9, 3.7)));
+      vec2 dragWake = -u_orbitVelocity * (0.2 + orbitDepth * 0.2) * u_orbitEnergy * (0.34 + wakeBand * 0.86);
+      vec2 parallaxOffset = u_orbitOffset * (0.58 + orbitDepth * 0.18);
+      float orbitZ = (fract(a_seed * 6.17) - 0.5) * (0.68 + orbitDepth * 0.62);
+      vec3 orbit3 = vec3(
+        orbitBase.x + parallaxOffset.x + flow.x + dragWake.x,
+        (orbitBase.y + parallaxOffset.y + flow.y + dragWake.y) * 0.9,
+        orbitZ
+      );
+      float orbitPersp = u_perspective / (u_perspective - orbit3.z * u_orbitScale * 0.7);
+      vec2 orbitPixel = u_center + orbit3.xy * u_orbitScale * orbitPersp;
+      float orbitPulse = 1.0 + sin(u_time * 1.7 + a_seed * 18.0) * (0.006 + u_orbitEnergy * 0.012);
+      orbitPixel = u_center + (orbitPixel - u_center) * orbitPulse;
+      vec2 pixel = mix(spherePixel, orbitPixel, orbitMix * (1.0 - sphereMix));
+      vec2 pointerDelta = pixel - u_pointer;
+      float push = smoothstep(220.0, 0.0, length(pointerDelta)) * 28.0;
+      pixel += normalize(pointerDelta + vec2(0.001)) * push * (sphereMix + orbitMix * 0.58);
+      vec2 clip = (pixel / u_resolution) * 2.0 - 1.0;
+      gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+
+      v_depth = clamp(mix((p.z + 1.25) / 2.5, (orbit3.z + 1.45) / 2.9, orbitMix * (1.0 - sphereMix)), 0.0, 1.0);
+      v_seed = a_seed;
+      float orbitEdge = 1.0 - smoothstep(0.86, 1.18, orbitShape);
+      float orbitVeil = 0.54 + smoothstep(-0.9, 0.95, streamA * 0.65 + streamB * 0.35) * 0.46;
+      v_alpha = mix(1.0, clamp(orbitEdge * orbitVeil + wakeBand * u_orbitEnergy * 0.25, 0.0, 1.0), orbitMix * (1.0 - sphereMix));
+      float displayPersp = mix(persp, orbitPersp, orbitMix * (1.0 - sphereMix));
+      gl_PointSize = a_size * (1.18 + v_depth * 1.95 + u_burst * 1.5 + u_orbitEnergy * orbitMix * 0.34) * (0.72 + sphereMix * 0.7 + orbitMix * 0.34) * displayPersp;
+    }
+  `);
+
+  const fragmentShader = createParticleShader(particleGl.FRAGMENT_SHADER, `
+    precision mediump float;
+    varying float v_depth;
+    varying float v_seed;
+    varying float v_alpha;
+
+    void main() {
+      vec2 uv = gl_PointCoord - vec2(0.5);
+      float r = length(uv);
+      float core = smoothstep(0.22, 0.0, r);
+      float halo = smoothstep(0.5, 0.02, r) * 0.45;
+      float twinkle = 0.78 + 0.22 * sin(v_seed * 40.0);
+      vec3 deepBlue = vec3(0.04, 0.22, 0.92);
+      vec3 electric = vec3(0.18, 0.72, 1.0);
+      vec3 whiteHot = vec3(0.88, 0.99, 1.0);
+      vec3 color = mix(deepBlue, electric, v_depth);
+      color = mix(color, whiteHot, core * 0.82);
+      float alpha = (core + halo) * (0.26 + v_depth * 0.74) * twinkle * v_alpha;
+      gl_FragColor = vec4(color * (0.85 + core * 1.8), alpha);
+    }
+  `);
+
+  const program = particleGl.createProgram();
+  particleGl.attachShader(program, vertexShader);
+  particleGl.attachShader(program, fragmentShader);
+  particleGl.linkProgram(program);
+  if (!particleGl.getProgramParameter(program, particleGl.LINK_STATUS)) {
+    console.warn("Particle program link failed", particleGl.getProgramInfoLog(program));
+    return;
+  }
+
+  const data = new Float32Array(WEBGL_PARTICLE_COUNT * 7);
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const orbitGrid = getVirtualOrbitGrid();
+  const orbitWidth = orbitGrid.cols + 3.4;
+  const orbitHeight = orbitGrid.rows * 0.92 + 2.9;
+  for (let index = 0; index < WEBGL_PARTICLE_COUNT; index += 1) {
+    const t = (index + 0.5) / WEBGL_PARTICLE_COUNT;
+    const y = 1 - t * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = index * golden;
+    const shell = 0.68 + ((index * 29) % 100) / 100 * 0.42;
+    const u = ((index * 0.61803398875) % 1);
+    const v = ((index * 0.75487766625) % 1);
+    const layer = (index % 5) / 4;
+    const lane = index % Math.max(1, orbitGrid.rows);
+    const laneY = (lane - (orbitGrid.rows - 1) / 2) * 0.92;
+    const laneBlend = index % 5 === 0 ? 0.26 : 0.07;
+    const cloudAngle = index * golden + v * 0.5;
+    const cloudRadius = Math.sqrt(u) * (0.82 + Math.sin(index * 0.031) * 0.08);
+    const sheetX = Math.cos(cloudAngle) * orbitWidth * 0.5 * cloudRadius;
+    const sheetY = Math.sin(cloudAngle) * orbitHeight * 0.54 * cloudRadius;
+    const current = Math.sin(sheetX * 1.17 + sheetY * 0.68 + index * 0.013);
+    const veil = Math.cos(sheetY * 1.48 - sheetX * 0.42 + index * 0.009);
+    const orbitX = sheetX + current * 0.2 + Math.sin(v * Math.PI * 8.0) * 0.12;
+    const orbitY = sheetY * (1 - laneBlend) + laneY * laneBlend + veil * 0.16 + (layer - 0.5) * 0.12;
+    const offset = index * 7;
+    data[offset] = Math.cos(theta) * r * shell;
+    data[offset + 1] = y * shell;
+    data[offset + 2] = Math.sin(theta) * r * shell;
+    data[offset + 3] = orbitX;
+    data[offset + 4] = orbitY;
+    data[offset + 5] = ((index * 37) % 1000) / 1000;
+    data[offset + 6] = 0.75 + ((index * 17) % 100) / 100 * 1.85;
+  }
+
+  const buffer = particleGl.createBuffer();
+  particleGl.bindBuffer(particleGl.ARRAY_BUFFER, buffer);
+  particleGl.bufferData(particleGl.ARRAY_BUFFER, data, particleGl.STATIC_DRAW);
+  particleGl.enable(particleGl.BLEND);
+  particleGl.blendFunc(particleGl.SRC_ALPHA, particleGl.ONE);
+  particleGl.disable(particleGl.DEPTH_TEST);
+
+  webglParticles = {
+    program,
+    buffer,
+    aPosition: particleGl.getAttribLocation(program, "a_position"),
+    aOrbit: particleGl.getAttribLocation(program, "a_orbit"),
+    aSeed: particleGl.getAttribLocation(program, "a_seed"),
+    aSize: particleGl.getAttribLocation(program, "a_size"),
+    uResolution: particleGl.getUniformLocation(program, "u_resolution"),
+    uCenter: particleGl.getUniformLocation(program, "u_center"),
+    uRadius: particleGl.getUniformLocation(program, "u_radius"),
+    uPerspective: particleGl.getUniformLocation(program, "u_perspective"),
+    uTime: particleGl.getUniformLocation(program, "u_time"),
+    uMode: particleGl.getUniformLocation(program, "u_mode"),
+    uBurst: particleGl.getUniformLocation(program, "u_burst"),
+    uRotX: particleGl.getUniformLocation(program, "u_rotX"),
+    uRotY: particleGl.getUniformLocation(program, "u_rotY"),
+    uPointer: particleGl.getUniformLocation(program, "u_pointer"),
+    uOrbitOffset: particleGl.getUniformLocation(program, "u_orbitOffset"),
+    uOrbitVelocity: particleGl.getUniformLocation(program, "u_orbitVelocity"),
+    uOrbitEnergy: particleGl.getUniformLocation(program, "u_orbitEnergy"),
+    uOrbitScale: particleGl.getUniformLocation(program, "u_orbitScale"),
+  };
+}
+
+function createParticleShader(type, source) {
+  const shader = particleGl.createShader(type);
+  particleGl.shaderSource(shader, source);
+  particleGl.compileShader(shader);
+  if (!particleGl.getShaderParameter(shader, particleGl.COMPILE_STATUS)) {
+    console.warn("Particle shader compile failed", particleGl.getShaderInfoLog(shader));
+  }
+  return shader;
+}
+
+function makeSacredParticle(index) {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const t = (index + 0.5) / SACRED_PARTICLE_COUNT;
+  const y = 1 - t * 2;
+  const ringRadius = Math.sqrt(Math.max(0, 1 - y * y));
+  const theta = index * golden;
+  const shell = 0.74 + ((index * 37) % 100) / 100 * 0.28;
+
+  return {
+    x: Math.cos(theta) * ringRadius * shell,
+    y: y * shell,
+    z: Math.sin(theta) * ringRadius * shell,
+    a: theta,
+    drift: 0.45 + ((index * 7) % 100) / 130,
+    size: 0.72 + ((index * 17) % 100) / 100 * 1.75,
+    tone: index % 6,
+    pulse: ((index * 19) % 100) / 100,
+    lane: index % 11,
+  };
 }
 
 function handleResize() {
@@ -399,6 +666,11 @@ function handleResize() {
 
 function resizeCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  particleCanvas.width = Math.round(window.innerWidth * dpr);
+  particleCanvas.height = Math.round(window.innerHeight * dpr);
+  particleCanvas.style.width = `${window.innerWidth}px`;
+  particleCanvas.style.height = `${window.innerHeight}px`;
+  if (particleGl) particleGl.viewport(0, 0, particleCanvas.width, particleCanvas.height);
   grainCanvas.width = Math.round(window.innerWidth * dpr);
   grainCanvas.height = Math.round(window.innerHeight * dpr);
   grainCanvas.style.width = `${window.innerWidth}px`;
@@ -931,6 +1203,7 @@ function handlePointerMove(event) {
     state.orbit.y += dy;
     state.orbit.vx = dx;
     state.orbit.vy = dy;
+    state.orbit.fieldEnergy = Math.min(1, state.orbit.fieldEnergy + Math.hypot(dx, dy) / 160);
   }
 
   if (state.mode === "sphere") {
@@ -987,11 +1260,19 @@ function handleWheel(event) {
 
 function setMode(nextMode, options = {}) {
   if (!MODES.includes(nextMode) || nextMode === state.mode) return;
+  const previousMode = state.mode;
   state.mode = nextMode;
   if (typeof options.focusIndex === "number") state.selected = options.focusIndex;
 
-  if (nextMode === "orbit") centerOrbitOn(state.selected);
+  if (nextMode === "orbit") {
+    if (typeof options.focusIndex === "number") {
+      centerOrbitOn(state.selected);
+    } else {
+      centerOrbitField();
+    }
+  }
 
+  startParticleTransition(previousMode, nextMode);
   document.body.dataset.mode = nextMode;
   document.body.classList.add("is-switching");
   state.transitionUntil = performance.now() + 920;
@@ -1003,6 +1284,12 @@ function setMode(nextMode, options = {}) {
     document.body.classList.remove("is-switching");
     applyLayout({ immediate: true });
   }, 930);
+}
+
+function startParticleTransition(fromMode, toMode) {
+  state.particleTransition.fromMode = fromMode;
+  state.particleTransition.toMode = toMode;
+  state.particleTransition.startedAt = performance.now();
 }
 
 function updateModeChrome() {
@@ -1022,6 +1309,323 @@ function showToast(text) {
   }, 620);
 }
 
+async function toggleGestureControl() {
+  if (state.gesture.loading) return;
+  if (state.gesture.active) {
+    stopGestureControl();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast("手势不可用");
+    return;
+  }
+
+  state.gesture.loading = true;
+  gestureButton.disabled = true;
+  showToast("手势加载中");
+
+  try {
+    const [{ FilesetResolver, HandLandmarker }, stream] = await Promise.all([
+      import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_TASKS_VERSION}/+esm`),
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+        },
+        audio: false,
+      }),
+    ]);
+
+    const vision = await FilesetResolver.forVisionTasks(
+      `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_TASKS_VERSION}/wasm`
+    );
+
+    const landmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+    });
+
+    state.gesture.stream = stream;
+    state.gesture.landmarker = landmarker;
+    state.gesture.active = true;
+    state.gesture.lastVideoTime = -1;
+    state.gesture.lastCenterX = null;
+    state.gesture.anchorX = null;
+    resetGestureState();
+    gestureVideo.srcObject = stream;
+    await gestureVideo.play();
+    document.body.classList.add("gesture-active");
+    gestureButton.setAttribute("aria-pressed", "true");
+    gestureButton.title = "关闭手势切换";
+    showToast("手势已启用");
+    runGestureFrame();
+  } catch (error) {
+    console.warn("Gesture control unavailable", error);
+    stopGestureControl();
+    showToast("手势不可用");
+  } finally {
+    state.gesture.loading = false;
+    gestureButton.disabled = false;
+  }
+}
+
+function stopGestureControl() {
+  window.cancelAnimationFrame(state.gesture.raf);
+  state.gesture.raf = 0;
+  if (state.gesture.stream) {
+    for (const track of state.gesture.stream.getTracks()) track.stop();
+  }
+  state.gesture.stream = null;
+  state.gesture.active = false;
+  state.gesture.lastCenterX = null;
+  state.gesture.anchorX = null;
+  resetGestureState();
+  gestureVideo.srcObject = null;
+  document.body.classList.remove("gesture-active");
+  gestureButton.removeAttribute("aria-pressed");
+  gestureButton.title = "手势切换";
+  showToast("手势关闭");
+}
+
+function runGestureFrame() {
+  if (!state.gesture.active || !state.gesture.landmarker) return;
+
+  if (gestureVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      gestureVideo.currentTime !== state.gesture.lastVideoTime) {
+    state.gesture.lastVideoTime = gestureVideo.currentTime;
+    const result = state.gesture.landmarker.detectForVideo(gestureVideo, performance.now());
+    handleGestureResult(result);
+  }
+
+  state.gesture.raf = requestAnimationFrame(runGestureFrame);
+}
+
+function resetGestureState() {
+  state.gesture.stableGesture = "open";
+  state.gesture.stableFrames = 0;
+  state.gesture.commandReady = true;
+  state.gesture.neutralFrames = 0;
+  state.gesture.lastSwitchAt = performance.now() - GESTURE_SWITCH_COOLDOWN;
+  state.gesture.dragActive = false;
+  state.gesture.dragX = 0;
+  state.gesture.dragY = 0;
+  state.gesture.lastAction = "none";
+}
+
+function legacyHandleGestureResult(result) {
+  const landmarks = result.landmarks?.[0];
+  if (!landmarks) {
+    state.gesture.lastCenterX = null;
+    return;
+  }
+
+  let centerX = 0;
+  let centerY = 0;
+  for (const point of landmarks) {
+    centerX += point.x / landmarks.length;
+    centerY += point.y / landmarks.length;
+  }
+
+  const screenX = 1 - centerX;
+  state.pointerX = screenX * window.innerWidth;
+  state.pointerY = centerY * window.innerHeight;
+  state.sphere.radiusBoost = Math.min(40, state.sphere.radiusBoost + 0.55);
+
+  const now = performance.now();
+  if (state.gesture.anchorX === null) state.gesture.anchorX = screenX;
+  if (now - state.gesture.lastSwitchAt > 950) {
+    const delta = screenX - state.gesture.anchorX;
+    if (Math.abs(delta) > 0.18) {
+      const direction = delta > 0 ? 1 : -1;
+      const current = MODES.indexOf(state.mode);
+      const nextIndex = clamp(current + direction, 0, MODES.length - 1);
+      if (nextIndex !== current) {
+        state.gesture.lastSwitchAt = now;
+        state.gesture.anchorX = screenX;
+        setMode(MODES[nextIndex]);
+        showToast(`手势 ${MODE_NAMES[MODES[nextIndex]]}`);
+      }
+    }
+  }
+
+  state.gesture.lastCenterX = screenX * 0.72 + (state.gesture.lastCenterX ?? screenX) * 0.28;
+}
+
+function handleGestureResult(result) {
+  const landmarks = result.landmarks?.[0];
+  if (!landmarks) {
+    state.gesture.lastCenterX = null;
+    state.gesture.neutralFrames += 1;
+    if (state.gesture.neutralFrames > 4) state.gesture.commandReady = true;
+    endGestureDrag();
+    return;
+  }
+
+  let centerX = 0;
+  let centerY = 0;
+  for (const point of landmarks) {
+    centerX += point.x / landmarks.length;
+    centerY += point.y / landmarks.length;
+  }
+
+  const screenX = 1 - centerX;
+  state.pointerX = screenX * window.innerWidth;
+  state.pointerY = centerY * window.innerHeight;
+  state.sphere.radiusBoost = Math.min(40, state.sphere.radiusBoost + 0.35);
+
+  const now = performance.now();
+  const gesture = classifyHandGesture(landmarks);
+  updateStableGesture(gesture);
+
+  if (gesture === "fist") {
+    state.gesture.neutralFrames = 0;
+    state.gesture.commandReady = true;
+    simulateGestureDrag(screenX, centerY);
+    state.gesture.lastCenterX = screenX;
+    return;
+  }
+
+  endGestureDrag();
+
+  const isCommand = gesture === "v" || gesture === "thumb";
+  if (!isCommand) {
+    state.gesture.neutralFrames += 1;
+    if (state.gesture.neutralFrames > 5) state.gesture.commandReady = true;
+    state.gesture.lastCenterX = screenX;
+    return;
+  }
+
+  state.gesture.neutralFrames = 0;
+  const isStableCommand = state.gesture.stableGesture === gesture &&
+    state.gesture.stableFrames >= GESTURE_STABLE_FRAMES;
+  if (isStableCommand && state.gesture.commandReady && now - state.gesture.lastSwitchAt > GESTURE_SWITCH_COOLDOWN) {
+    const direction = gesture === "v" ? 1 : -1;
+    const current = MODES.indexOf(state.mode);
+    const nextIndex = clamp(current + direction, 0, MODES.length - 1);
+    if (nextIndex !== current) {
+      state.gesture.lastSwitchAt = now;
+      state.gesture.commandReady = false;
+      state.gesture.lastAction = gesture;
+      setMode(MODES[nextIndex]);
+      showToast(`Gesture ${MODE_NAMES[MODES[nextIndex]]}`);
+    }
+  }
+
+  state.gesture.lastCenterX = screenX * 0.72 + (state.gesture.lastCenterX ?? screenX) * 0.28;
+}
+
+function updateStableGesture(gesture) {
+  if (gesture === state.gesture.stableGesture) {
+    state.gesture.stableFrames += 1;
+    return;
+  }
+
+  state.gesture.stableGesture = gesture;
+  state.gesture.stableFrames = 1;
+}
+
+function classifyHandGesture(landmarks) {
+  const fingers = getFingerStates(landmarks);
+  const extendedCount = [fingers.index, fingers.middle, fingers.ring, fingers.pinky].filter(Boolean).length;
+  const thumbOnly = fingers.thumb && !fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky;
+  const vSign = fingers.index && fingers.middle && !fingers.ring && !fingers.pinky &&
+    distance2d(landmarks[8], landmarks[12]) > distance2d(landmarks[5], landmarks[9]) * 0.82;
+  const fist = !fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky && !fingers.thumb;
+
+  if (vSign) return "v";
+  if (thumbOnly) return "thumb";
+  if (fist || extendedCount === 0 && !fingers.thumb) return "fist";
+  return "open";
+}
+
+function getFingerStates(landmarks) {
+  const wrist = landmarks[0];
+  const palmScale = Math.max(0.001, distance2d(wrist, landmarks[9]));
+  const isExtended = (tip, pip, mcp) => {
+    const tipDistance = distance2d(wrist, landmarks[tip]);
+    const pipDistance = distance2d(wrist, landmarks[pip]);
+    const mcpDistance = distance2d(wrist, landmarks[mcp]);
+    return tipDistance > pipDistance + palmScale * 0.08 &&
+      tipDistance > mcpDistance + palmScale * 0.22;
+  };
+  const thumbSpread = distance2d(landmarks[4], landmarks[9]) / palmScale;
+  const thumbTip = distance2d(wrist, landmarks[4]);
+  const thumbIp = distance2d(wrist, landmarks[3]);
+
+  return {
+    thumb: thumbSpread > 0.82 && thumbTip > thumbIp + palmScale * 0.05,
+    index: isExtended(8, 6, 5),
+    middle: isExtended(12, 10, 9),
+    ring: isExtended(16, 14, 13),
+    pinky: isExtended(20, 18, 17),
+  };
+}
+
+function simulateGestureDrag(screenX, screenY) {
+  const x = screenX * window.innerWidth;
+  const y = screenY * window.innerHeight;
+
+  if (!state.gesture.dragActive) {
+    state.gesture.dragActive = true;
+    state.gesture.dragX = x;
+    state.gesture.dragY = y;
+    state.isPointerDown = true;
+    state.didDrag = false;
+    document.body.classList.add("is-dragging");
+    return;
+  }
+
+  const dx = (x - state.gesture.dragX) * GESTURE_DRAG_SCALE;
+  const dy = (y - state.gesture.dragY) * GESTURE_DRAG_SCALE;
+  applyVirtualDrag(dx, dy);
+  state.gesture.dragX = x;
+  state.gesture.dragY = y;
+}
+
+function endGestureDrag() {
+  if (!state.gesture.dragActive) return;
+  state.gesture.dragActive = false;
+  state.isPointerDown = false;
+  document.body.classList.remove("is-dragging");
+  window.setTimeout(() => {
+    state.didDrag = false;
+  }, 40);
+}
+
+function applyVirtualDrag(dx, dy) {
+  if (Math.abs(dx) + Math.abs(dy) > 4) state.didDrag = true;
+
+  if (state.mode === "waterfall") {
+    stage.scrollTop -= dy;
+  }
+
+  if (state.mode === "orbit") {
+    state.orbit.x += dx;
+    state.orbit.y += dy;
+    state.orbit.vx = dx;
+    state.orbit.vy = dy;
+    state.orbit.fieldEnergy = Math.min(1, state.orbit.fieldEnergy + Math.hypot(dx, dy) / 160);
+  }
+
+  if (state.mode === "sphere") {
+    state.sphere.rotY += dx * 0.008;
+    state.sphere.rotX -= dy * 0.006;
+    state.sphere.vy = dx * 0.00018;
+    state.sphere.vx = -dy * 0.00014;
+    state.sphere.radiusBoost = Math.min(26, state.sphere.radiusBoost + Math.hypot(dx, dy) * 0.08);
+  }
+}
+
+function distance2d(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 function centerOrbitOn(index) {
   const grid = getOrbitGrid();
   const point = getOrbitPoint(index, grid);
@@ -1029,6 +1633,36 @@ function centerOrbitOn(index) {
   state.orbit.y = -point.y;
   state.orbit.vx = 0;
   state.orbit.vy = 0;
+  syncOrbitParticleField(true);
+}
+
+function centerOrbitField() {
+  state.orbit.x = 0;
+  state.orbit.y = 0;
+  state.orbit.vx = 0;
+  state.orbit.vy = 0;
+  syncOrbitParticleField(true);
+}
+
+function syncOrbitParticleField(immediate = false) {
+  if (immediate) {
+    state.orbit.fieldX = state.orbit.x;
+    state.orbit.fieldY = state.orbit.y;
+    state.orbit.fieldVx = 0;
+    state.orbit.fieldVy = 0;
+    state.orbit.fieldEnergy = 0;
+    return;
+  }
+
+  const dx = state.orbit.x - state.orbit.fieldX;
+  const dy = state.orbit.y - state.orbit.fieldY;
+  state.orbit.fieldVx = state.orbit.fieldVx * 0.82 + dx * 0.055 + state.orbit.vx * 0.055;
+  state.orbit.fieldVy = state.orbit.fieldVy * 0.82 + dy * 0.055 + state.orbit.vy * 0.055;
+  state.orbit.fieldX += state.orbit.fieldVx;
+  state.orbit.fieldY += state.orbit.fieldVy;
+  const motion = Math.hypot(state.orbit.vx, state.orbit.vy) + Math.hypot(state.orbit.fieldVx, state.orbit.fieldVy) * 0.45;
+  const targetEnergy = clamp(motion / 38, 0, 1);
+  state.orbit.fieldEnergy += (targetEnergy - state.orbit.fieldEnergy) * 0.12;
 }
 
 function applyLayout({ immediate = false } = {}) {
@@ -1077,6 +1711,7 @@ function applyOrbitLayout() {
   const centerY = height / 2;
   const base = width < 540 ? 58 : width < 920 ? 70 : 82;
   const grid = getOrbitGrid();
+  const now = performance.now();
   gallery.style.height = `${height}px`;
 
   cards.forEach((card, index) => {
@@ -1084,22 +1719,61 @@ function applyOrbitLayout() {
     const fieldX = point.x + state.orbit.x;
     const fieldY = point.y + state.orbit.y;
     const distance = Math.hypot(fieldX, fieldY);
-    const lens = 1 + Math.max(0, 1 - distance / 430) * 0.18;
-    const screenX = centerX + fieldX * lens;
-    const screenY = centerY + fieldY * lens;
-    const scale = clamp(1.18 - distance / 560, 0.44, 1.18);
+    const depthWave = Math.sin(index * 1.91 + state.orbit.fieldX * 0.006 + now * 0.00065) * 0.5 + 0.5;
+    const lens = 1 + Math.max(0, 1 - distance / 430) * 0.16;
+    const driftX = Math.sin(now * 0.00072 + index * 1.7) * 4;
+    const driftY = Math.cos(now * 0.00062 + index * 1.23) * 3;
+    const screenX = centerX + fieldX * lens + driftX;
+    const screenY = centerY + fieldY * lens + driftY;
+    const scale = clamp(1.16 - distance / 580 + depthWave * 0.08, 0.42, 1.16);
+    const depth = clamp(1 - distance / 720 + depthWave * 0.18, 0, 1);
     const size = Math.round(base * scale);
     const isSelected = index === state.selected;
+    const body = physics[index];
+    const targetX = screenX - size / 2;
+    const targetY = screenY - size / 2;
+    const unseeded = body.x === 0 && body.y === 0;
+
+    if (unseeded || performance.now() < state.transitionUntil) {
+      body.x = targetX;
+      body.y = targetY;
+      body.size = size;
+      body.vx = 0;
+      body.vy = 0;
+    } else {
+      const dx = targetX - body.x;
+      const dy = targetY - body.y;
+      body.vx = body.vx * 0.72 + dx * 0.16 + state.orbit.vx * 0.012;
+      body.vy = body.vy * 0.72 + dy * 0.16 + state.orbit.vy * 0.012;
+
+      const cardCenterX = body.x + body.size / 2;
+      const cardCenterY = body.y + body.size / 2;
+      const pointerDistance = Math.hypot(cardCenterX - state.pointerX, cardCenterY - state.pointerY);
+      const pointerRange = 92 + depth * 54;
+      if (pointerDistance < pointerRange) {
+        const force = (pointerRange - pointerDistance) / pointerRange;
+        const angle = Math.atan2(cardCenterY - state.pointerY, cardCenterX - state.pointerX);
+        body.vx += Math.cos(angle) * force * (1.1 + depth * 1.2);
+        body.vy += Math.sin(angle) * force * (1.1 + depth * 1.2);
+        state.orbit.fieldEnergy = Math.min(1, state.orbit.fieldEnergy + force * 0.015);
+      }
+
+      body.x += body.vx;
+      body.y += body.vy;
+      body.size += (size - body.size) * 0.18;
+    }
 
     setCardStyle(card, {
-      x: screenX - size / 2,
-      y: screenY - size / 2,
-      width: size,
-      height: size,
-      opacity: distance > Math.max(width, height) * 0.82 ? 0.2 : 1,
-      z: Math.round(scale * 1000) + (isSelected ? 2000 : 0),
-      radius: size / 2,
-      filter: isSelected ? "saturate(1.14) brightness(1.07)" : "none",
+      x: body.x,
+      y: body.y,
+      width: body.size,
+      height: body.size,
+      opacity: distance > Math.max(width, height) * 0.76 ? 0.12 : clamp(0.32 + depth * 0.78, 0.24, 1),
+      z: Math.round(depth * 1600 + scale * 500) + (isSelected ? 2000 : 0),
+      radius: body.size / 2,
+      filter: isSelected
+        ? "saturate(1.18) brightness(1.1)"
+        : `saturate(${0.86 + depth * 0.38}) brightness(${0.68 + depth * 0.36})`,
     });
   });
 }
@@ -1111,23 +1785,32 @@ function getOrbitGrid() {
   return { base, cols, rows };
 }
 
+function getVirtualOrbitGrid() {
+  const cols = Math.ceil(Math.sqrt(Math.max(1, items.length)) * 1.25);
+  const rows = Math.ceil(Math.max(1, items.length) / cols);
+  return { cols, rows };
+}
+
 function getOrbitPoint(index, grid) {
   const col = index % grid.cols;
   const row = Math.floor(index / grid.cols);
   const offset = row % 2 ? grid.base * 0.34 : 0;
+  const jitterX = Math.sin(index * 12.9898) * grid.base * 0.18;
+  const jitterY = Math.cos(index * 7.233) * grid.base * 0.14;
   return {
-    x: (col - (grid.cols - 1) / 2) * grid.base + offset,
-    y: (row - (grid.rows - 1) / 2) * grid.base * 0.88,
+    x: (col - (grid.cols - 1) / 2) * grid.base + offset + jitterX,
+    y: (row - (grid.rows - 1) / 2) * grid.base * 0.88 + jitterY,
   };
 }
 
 function applySphereLayout({ seedPhysics = false } = {}) {
   const width = stage.clientWidth;
   const height = stage.clientHeight;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const radius = Math.min(width, height) * 0.34 + state.sphere.radiusBoost;
-  const perspective = Math.max(width, height) * 1.05;
+  const metrics = getSacredSphereMetrics(width, height);
+  const centerX = metrics.centerX;
+  const centerY = metrics.centerY;
+  const radius = metrics.radius + state.sphere.radiusBoost;
+  const perspective = metrics.perspective;
   gallery.style.height = `${height}px`;
 
   const sinX = Math.sin(state.sphere.rotX);
@@ -1145,7 +1828,7 @@ function applySphereLayout({ seedPhysics = false } = {}) {
     const projected = perspective / (perspective - z2 * radius);
     const targetX = centerX + x1 * radius * projected;
     const targetY = centerY + y1 * radius * projected;
-    const targetSize = clamp(19 + depth * 28, 18, 48);
+    const targetSize = clamp(metrics.cardMin + depth * metrics.cardDepth, metrics.cardMin, metrics.cardMax);
     const body = physics[index];
 
     if (seedPhysics || body.x === 0 && body.y === 0) {
@@ -1178,12 +1861,26 @@ function applySphereLayout({ seedPhysics = false } = {}) {
       y: body.y - body.size / 2,
       width: body.size,
       height: body.size,
-      opacity: clamp(0.36 + depth * 0.78, 0.28, 1),
+      opacity: clamp(0.2 + depth * 0.9, 0.18, 1),
       z: Math.round(depth * 1000),
       radius: body.size / 2,
-      filter: "none",
+      filter: `saturate(${1.02 + depth * 0.26}) brightness(${0.82 + depth * 0.32})`,
     });
   });
+}
+
+function getSacredSphereMetrics(width, height) {
+  const shortSide = Math.min(width, height);
+  const radius = shortSide * (width < 700 ? 0.31 : 0.36);
+  return {
+    centerX: width / 2,
+    centerY: height * (width < 700 ? 0.5 : 0.51),
+    radius,
+    perspective: Math.max(width, height) * 1.18,
+    cardMin: width < 700 ? 30 : 40,
+    cardMax: width < 700 ? 58 : 82,
+    cardDepth: width < 700 ? 32 : 52,
+  };
 }
 
 function setCardStyle(card, layout) {
@@ -1230,6 +1927,7 @@ function setCardStyle(card, layout) {
 
 function tick() {
   const now = performance.now();
+  syncOrbitParticleField(state.mode !== "orbit" && now > state.transitionUntil);
 
   if (state.mode === "orbit" && now > state.transitionUntil) {
     if (!state.isPointerDown) {
@@ -1253,12 +1951,69 @@ function tick() {
       state.sphere.radiusBoost *= 0.94;
       applySphereLayout();
     }
+    drawWebglParticles(now);
     drawParticleField(now);
   } else {
+    drawWebglParticles(now);
     drawParticleField(now);
   }
 
   requestAnimationFrame(tick);
+}
+
+function drawWebglParticles(now) {
+  if (!particleGl || !webglParticles) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const metrics = getSacredSphereMetrics(width, height);
+  const transition = getParticleTransition(now);
+  particleGl.clearColor(0, 0, 0, 0);
+  particleGl.clear(particleGl.COLOR_BUFFER_BIT);
+  particleGl.useProgram(webglParticles.program);
+  particleGl.bindBuffer(particleGl.ARRAY_BUFFER, webglParticles.buffer);
+  particleGl.enableVertexAttribArray(webglParticles.aPosition);
+  particleGl.vertexAttribPointer(webglParticles.aPosition, 3, particleGl.FLOAT, false, 28, 0);
+  particleGl.enableVertexAttribArray(webglParticles.aOrbit);
+  particleGl.vertexAttribPointer(webglParticles.aOrbit, 2, particleGl.FLOAT, false, 28, 12);
+  particleGl.enableVertexAttribArray(webglParticles.aSeed);
+  particleGl.vertexAttribPointer(webglParticles.aSeed, 1, particleGl.FLOAT, false, 28, 20);
+  particleGl.enableVertexAttribArray(webglParticles.aSize);
+  particleGl.vertexAttribPointer(webglParticles.aSize, 1, particleGl.FLOAT, false, 28, 24);
+  particleGl.uniform2f(webglParticles.uResolution, particleCanvas.width, particleCanvas.height);
+  particleGl.uniform2f(webglParticles.uCenter, metrics.centerX * dpr, metrics.centerY * dpr);
+  particleGl.uniform1f(webglParticles.uRadius, metrics.radius * dpr);
+  particleGl.uniform1f(webglParticles.uPerspective, metrics.perspective * dpr);
+  particleGl.uniform1f(webglParticles.uTime, now * 0.001);
+  particleGl.uniform1f(webglParticles.uMode, transition.modeBlend);
+  particleGl.uniform1f(webglParticles.uBurst, transition.burst);
+  particleGl.uniform1f(webglParticles.uRotX, state.sphere.rotX);
+  particleGl.uniform1f(webglParticles.uRotY, state.sphere.rotY);
+  particleGl.uniform2f(webglParticles.uPointer, state.pointerX * dpr, state.pointerY * dpr);
+  const orbitGrid = getOrbitGrid();
+  particleGl.uniform2f(webglParticles.uOrbitOffset, state.orbit.fieldX / orbitGrid.base, state.orbit.fieldY / orbitGrid.base);
+  particleGl.uniform2f(webglParticles.uOrbitVelocity, state.orbit.fieldVx / orbitGrid.base, state.orbit.fieldVy / orbitGrid.base);
+  particleGl.uniform1f(webglParticles.uOrbitEnergy, state.orbit.fieldEnergy);
+  particleGl.uniform1f(webglParticles.uOrbitScale, orbitGrid.base * dpr);
+  particleGl.drawArrays(particleGl.POINTS, 0, WEBGL_PARTICLE_COUNT);
+}
+
+function getParticleTransition(now) {
+  const transition = state.particleTransition;
+  const elapsed = now - transition.startedAt;
+  const progress = clamp(elapsed / transition.duration, 0, 1);
+  const eased = progress * progress * (3 - progress * 2);
+  const fromBlend = getParticleModeValue(transition.fromMode);
+  const toBlend = getParticleModeValue(transition.toMode);
+  const modeBlend = fromBlend + (toBlend - fromBlend) * eased;
+  const burst = Math.sin(progress * Math.PI) * (transition.fromMode === transition.toMode ? 0 : 1);
+  return { modeBlend, burst };
+}
+
+function getParticleModeValue(mode) {
+  if (mode === "orbit") return 0.5;
+  if (mode === "sphere") return 1;
+  return 0;
 }
 
 function drawParticleField(now) {
@@ -1271,53 +2026,140 @@ function drawParticleField(now) {
   const cy = height / 2;
   const radius = Math.min(width, height) * 0.34;
   const palette = [
-    "126, 231, 255",
-    "216, 255, 99",
-    "240, 90, 162",
-    "157, 140, 255",
+    "56, 178, 255",
+    "111, 218, 255",
+    "190, 244, 255",
+    "74, 112, 255",
+    "232, 252, 255",
+    "24, 92, 210",
   ];
 
-  for (let lane = 0; lane < 6; lane += 1) {
+  for (let lane = 0; lane < 7; lane += 1) {
     const y = height * (0.14 + lane * 0.14);
     const shift = (now * 0.006 * (lane + 1)) % (width + 300);
-    const alpha = state.mode === "sphere" ? 0.08 : 0.034;
+    const alpha = state.mode === "sphere" ? 0.12 : 0.052;
     grainCtx.strokeStyle = `rgba(${palette[lane % palette.length]}, ${alpha})`;
-    grainCtx.lineWidth = 1;
+    grainCtx.lineWidth = state.mode === "sphere" ? 1.4 : 1;
     grainCtx.beginPath();
     grainCtx.moveTo(-260 + shift, y);
     grainCtx.lineTo(width + shift, y + Math.sin(now * 0.00036 + lane) * 24);
     grainCtx.stroke();
   }
 
-  for (const particle of grainParticles) {
-    const wobble = Math.sin(now * 0.0012 * particle.drift + particle.a) * 0.055;
-    const modeDrift = state.mode === "sphere" ? state.sphere.rotY * 0.8 : now * 0.00008;
-    const angle = particle.a + modeDrift + wobble;
-    const band = Math.sin(particle.a * 1.7 + state.sphere.rotX);
-    const laneOffset = (particle.lane - 4) * height * 0.052;
-    const r = radius * particle.r * (state.mode === "sphere" ? 0.74 + Math.abs(band) * 0.34 : 1.32);
-    const x = state.mode === "sphere"
-      ? cx + Math.cos(angle) * r
-      : (Math.cos(angle) * r + cx + now * particle.drift * 0.018) % (width + 160) - 80;
-    const y = state.mode === "sphere"
-      ? cy + Math.sin(angle) * r * 0.72 + band * radius * 0.32
-      : cy + laneOffset + Math.sin(angle * 1.8) * 38;
-    const alpha = state.mode === "sphere" ? 0.075 + Math.abs(band) * 0.11 : 0.045;
-    grainCtx.fillStyle = `rgba(${palette[particle.tone]}, ${alpha})`;
-    grainCtx.beginPath();
-    grainCtx.arc(x, y, particle.size, 0, Math.PI * 2);
-    grainCtx.fill();
+  if (state.mode === "waterfall") {
+    drawAmbientParticles(now, width, height, cx, cy, radius, palette);
   }
 
-  if (state.mode === "sphere") {
-    for (let ring = 0; ring < 4; ring += 1) {
-      const ringRadius = radius * (0.74 + ring * 0.1 + Math.sin(now * 0.001 + ring) * 0.012);
-      grainCtx.strokeStyle = `rgba(${palette[ring]}, ${0.09 - ring * 0.012})`;
-      grainCtx.lineWidth = 1.2;
+  grainCtx.restore();
+}
+
+function drawAmbientParticles(now, width, height, cx, cy, radius, palette) {
+  const limit = Math.min(220, grainParticles.length);
+  for (let index = 0; index < limit; index += 1) {
+    const particle = grainParticles[index];
+    const angle = particle.a + now * 0.00008 * particle.drift;
+    const laneOffset = (particle.lane - 5) * height * 0.046;
+    const r = radius * (0.45 + Math.abs(particle.z) * 1.12);
+    const x = (Math.cos(angle) * r + cx + now * particle.drift * 0.018) % (width + 180) - 90;
+    const y = cy + laneOffset + Math.sin(angle * 1.8) * 38;
+    grainCtx.fillStyle = `rgba(${palette[particle.tone]}, 0.05)`;
+    grainCtx.beginPath();
+    grainCtx.arc(x, y, particle.size * 0.55, 0, Math.PI * 2);
+    grainCtx.fill();
+  }
+}
+
+function drawSacredParticleSphere(now, width, height, palette) {
+  const metrics = getSacredSphereMetrics(width, height);
+  const radius = metrics.radius + state.sphere.radiusBoost * 0.72;
+  const cx = metrics.centerX;
+  const cy = metrics.centerY;
+  const sinX = Math.sin(state.sphere.rotX + Math.sin(now * 0.00021) * 0.08);
+  const cosX = Math.cos(state.sphere.rotX + Math.sin(now * 0.00021) * 0.08);
+  const sinY = Math.sin(state.sphere.rotY + now * 0.00009);
+  const cosY = Math.cos(state.sphere.rotY + now * 0.00009);
+  const projected = [];
+
+  const halo = grainCtx.createRadialGradient(cx, cy, radius * 0.05, cx, cy, radius * 1.42);
+  halo.addColorStop(0, "rgba(230, 252, 255, 0.32)");
+  halo.addColorStop(0.18, "rgba(111, 218, 255, 0.24)");
+  halo.addColorStop(0.52, "rgba(44, 118, 255, 0.13)");
+  halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+  grainCtx.fillStyle = halo;
+  grainCtx.beginPath();
+  grainCtx.arc(cx, cy, radius * 1.44, 0, Math.PI * 2);
+  grainCtx.fill();
+
+  for (let ring = 0; ring < 8; ring += 1) {
+    const ringRadius = radius * (0.42 + ring * 0.112 + Math.sin(now * 0.001 + ring) * 0.008);
+    const alpha = 0.24 - ring * 0.016;
+    grainCtx.strokeStyle = `rgba(${palette[(ring + 1) % palette.length]}, ${alpha})`;
+    grainCtx.lineWidth = ring === 3 ? 1.9 : 1.15;
+    grainCtx.beginPath();
+    grainCtx.ellipse(cx, cy, ringRadius, ringRadius * (0.27 + ring * 0.038), state.sphere.rotY * 0.42 + ring * 0.44, 0, Math.PI * 2);
+    grainCtx.stroke();
+  }
+
+  for (const particle of grainParticles) {
+    const localX = particle.x + Math.sin(now * 0.00032 * particle.drift + particle.a) * 0.014;
+    const localY = particle.y + Math.cos(now * 0.00028 * particle.drift + particle.a) * 0.012;
+    const localZ = particle.z;
+    const x1 = localX * cosY - localZ * sinY;
+    const z1 = localX * sinY + localZ * cosY;
+    const y1 = localY * cosX - z1 * sinX;
+    const z2 = localY * sinX + z1 * cosX;
+    const depth = (z2 + 1.12) / 2.24;
+    const perspective = metrics.perspective / (metrics.perspective - z2 * radius);
+
+    projected.push({
+      index: projected.length,
+      x: cx + x1 * radius * perspective,
+      y: cy + y1 * radius * perspective,
+      z: z2,
+      depth,
+      particle,
+    });
+  }
+
+  drawParticleFilaments(projected, radius, palette);
+
+  projected.sort((a, b) => a.z - b.z);
+
+  for (const point of projected) {
+    const twinkle = 0.72 + Math.sin(now * 0.0024 * point.particle.drift + point.particle.pulse * Math.PI * 2) * 0.28;
+    const alpha = clamp(0.18 + point.depth * 0.74, 0.1, 0.92) * twinkle;
+    const size = point.particle.size * (0.72 + point.depth * 1.26);
+    grainCtx.fillStyle = `rgba(${palette[point.particle.tone]}, ${alpha})`;
+    grainCtx.beginPath();
+    grainCtx.arc(point.x, point.y, size, 0, Math.PI * 2);
+    grainCtx.fill();
+
+    if (point.depth > 0.76 && point.particle.pulse > 0.9) {
+      grainCtx.fillStyle = `rgba(226, 252, 255, ${0.15 * twinkle})`;
       grainCtx.beginPath();
-      grainCtx.ellipse(cx, cy, ringRadius, ringRadius * (0.28 + ring * 0.08), state.sphere.rotY + ring * 0.7, 0, Math.PI * 2);
-      grainCtx.stroke();
+      grainCtx.arc(point.x, point.y, size * 2.4, 0, Math.PI * 2);
+      grainCtx.fill();
     }
+  }
+}
+
+function drawParticleFilaments(projected, radius, palette) {
+  grainCtx.save();
+  grainCtx.globalCompositeOperation = "screen";
+  for (let index = 0; index < projected.length; index += 11) {
+    const point = projected[index];
+    if (point.depth < 0.34) continue;
+    const linked = projected[(index + 89) % projected.length];
+    if (!linked || linked.depth < 0.34) continue;
+    const distance = Math.hypot(point.x - linked.x, point.y - linked.y);
+    if (distance > radius * 0.34) continue;
+    const alpha = clamp((1 - distance / (radius * 0.34)) * (point.depth + linked.depth) * 0.24, 0, 0.28);
+    grainCtx.strokeStyle = `rgba(${palette[(index + 2) % palette.length]}, ${alpha})`;
+    grainCtx.lineWidth = 0.55 + Math.max(point.depth, linked.depth) * 0.7;
+    grainCtx.beginPath();
+    grainCtx.moveTo(point.x, point.y);
+    grainCtx.lineTo(linked.x, linked.y);
+    grainCtx.stroke();
   }
   grainCtx.restore();
 }
@@ -1560,4 +2402,14 @@ function rectKeyframe(rect, scale) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+if (["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+  window.__galleryDebug = {
+    state,
+    webgl: webglParticles,
+    getParticleTransition: () => getParticleTransition(performance.now()),
+    handleGestureResult,
+    classifyHandGesture,
+  };
 }
