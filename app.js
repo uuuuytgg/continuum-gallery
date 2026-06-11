@@ -16,6 +16,7 @@ const immersiveButton = document.getElementById("immersiveButton");
 const focusButton = document.getElementById("focusButton");
 const googleButton = document.getElementById("googleButton");
 const gestureButton = document.getElementById("gestureButton");
+const themeButton = document.getElementById("themeButton");
 const gestureVideo = document.getElementById("gestureVideo");
 const photosPanel = document.getElementById("photosPanel");
 const photosPanelClose = document.getElementById("photosPanelClose");
@@ -36,6 +37,7 @@ const viewerZoomReset = document.getElementById("viewerZoomReset");
 const viewerZoomIn = document.getElementById("viewerZoomIn");
 
 const MODES = ["waterfall", "orbit", "sphere"];
+const THEME_KEY = "continuum-gallery.theme";
 const GOOGLE_CLIENT_ID_KEY = "continuum-gallery.googleClientId";
 const GOOGLE_PHOTOS_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
 const GOOGLE_PHOTOS_API = "https://photospicker.googleapis.com";
@@ -46,9 +48,16 @@ const ACTIVE_ALBUM_ID = "active-google-photos";
 const SACRED_PARTICLE_COUNT = 1480;
 const WEBGL_PARTICLE_COUNT = 18000;
 const MEDIAPIPE_TASKS_VERSION = "0.10.35";
+const GESTURE_CAMERA_WIDTH = 424;
+const GESTURE_CAMERA_HEIGHT = 240;
+const GESTURE_DETECTION_FPS = 15;
+const GESTURE_DETECTION_INTERVAL = 1000 / GESTURE_DETECTION_FPS;
+const GESTURE_SWITCH_DETECTION_PAUSE = 1120;
 const GESTURE_STABLE_FRAMES = 7;
 const GESTURE_SWITCH_COOLDOWN = 1350;
 const GESTURE_DRAG_SCALE = 1.45;
+const GESTURE_DRAG_LERP = 0.34;
+const GESTURE_DRAG_EPSILON = 0.18;
 const MODE_NAMES = {
   waterfall: "瀑布流",
   orbit: "球形滑动",
@@ -125,6 +134,9 @@ const state = {
     landmarker: null,
     raf: 0,
     lastVideoTime: -1,
+    lastDetectAt: 0,
+    detectCost: 0,
+    suspendUntil: 0,
     lastCenterX: null,
     anchorX: null,
     lastSwitchAt: -GESTURE_SWITCH_COOLDOWN,
@@ -135,6 +147,8 @@ const state = {
     dragActive: false,
     dragX: 0,
     dragY: 0,
+    dragTargetX: 0,
+    dragTargetY: 0,
     lastAction: "none",
   },
 };
@@ -152,6 +166,7 @@ let imageLayoutTimer = 0;
 init();
 
 function init() {
+  applyTheme(localStorage.getItem(THEME_KEY) === "night" ? "night" : "day");
   googleClientIdInput.value = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || "";
   setGoogleStatus(googleClientIdInput.value ? "Client ID ready" : "Add Client ID");
   renderCards();
@@ -168,6 +183,7 @@ function init() {
   focusButton.addEventListener("click", () => openViewer(state.selected));
   googleButton.addEventListener("click", openPhotosPanel);
   gestureButton.addEventListener("click", toggleGestureControl);
+  themeButton.addEventListener("click", toggleTheme);
   photosPanelClose.addEventListener("click", closePhotosPanel);
   saveClientButton.addEventListener("click", saveGoogleClientId);
   importPhotosButton.addEventListener("click", startGooglePhotosImport);
@@ -207,6 +223,23 @@ function init() {
   });
 }
 
+function toggleTheme() {
+  const nextTheme = document.body.dataset.theme === "night" ? "day" : "night";
+  applyTheme(nextTheme);
+  localStorage.setItem(THEME_KEY, nextTheme);
+}
+
+function applyTheme(theme) {
+  const normalized = theme === "night" ? "night" : "day";
+  document.body.dataset.theme = normalized;
+  if (!themeButton) return;
+  const isNight = normalized === "night";
+  themeButton.setAttribute("aria-label", isNight ? "切换日间模式" : "切换夜间模式");
+  themeButton.title = isNight ? "切换日间模式" : "切换夜间模式";
+  const label = themeButton.querySelector("span");
+  if (label) label.textContent = isNight ? "日" : "夜";
+}
+
 function createItems() {
   const ratios = [1.22, 0.78, 1.45, 0.92, 1.08, 1.58, 0.72, 1.34, 0.84, 1.18];
   const generated = Array.from({ length: 39 }, (_, index) => {
@@ -229,11 +262,11 @@ function makeArtwork(index, ratio) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const palette = [
-    ["58, 185, 255", "212, 247, 255", "7, 16, 31"],
-    ["72, 132, 255", "158, 229, 255", "8, 13, 32"],
-    ["121, 221, 255", "236, 252, 255", "5, 21, 37"],
-    ["36, 104, 220", "180, 241, 255", "8, 12, 25"],
-    ["91, 202, 255", "146, 170, 255", "6, 17, 34"],
+    ["8, 43, 131", "120, 197, 214", "244, 239, 230"],
+    ["6, 21, 63", "184, 226, 220", "247, 242, 234"],
+    ["38, 83, 164", "216, 197, 158", "238, 229, 215"],
+    ["8, 43, 131", "255, 250, 240", "232, 223, 209"],
+    ["48, 71, 143", "120, 197, 214", "241, 235, 224"],
   ][index % 5];
 
   canvas.width = width;
@@ -243,19 +276,26 @@ function makeArtwork(index, ratio) {
   ctx.fillRect(0, 0, width, height);
 
   const baseGlow = ctx.createLinearGradient(0, 0, width, height);
-  baseGlow.addColorStop(0, `rgba(${palette[0]}, 0.34)`);
-  baseGlow.addColorStop(0.38, "rgba(255, 255, 255, 0.04)");
-  baseGlow.addColorStop(0.68, `rgba(${palette[1]}, 0.22)`);
-  baseGlow.addColorStop(1, "rgba(0, 0, 0, 0.58)");
+  baseGlow.addColorStop(0, `rgba(${palette[0]}, 0.18)`);
+  baseGlow.addColorStop(0.38, "rgba(255, 250, 240, 0.24)");
+  baseGlow.addColorStop(0.68, `rgba(${palette[1]}, 0.18)`);
+  baseGlow.addColorStop(1, "rgba(6, 21, 63, 0.24)");
   ctx.fillStyle = baseGlow;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.globalCompositeOperation = "screen";
+  const inkWash = ctx.createLinearGradient(width, 0, 0, height);
+  inkWash.addColorStop(0, "rgba(8, 43, 131, 0.13)");
+  inkWash.addColorStop(0.48, "rgba(255, 250, 240, 0)");
+  inkWash.addColorStop(1, "rgba(6, 21, 63, 0.18)");
+  ctx.fillStyle = inkWash;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.globalCompositeOperation = "multiply";
   for (let layer = 0; layer < 7; layer += 1) {
     const y = height * (0.16 + layer * 0.12);
-    const alpha = 0.12 - layer * 0.008;
+    const alpha = 0.15 - layer * 0.01;
     ctx.strokeStyle = `rgba(${layer % 2 ? palette[1] : palette[0]}, ${alpha})`;
-    ctx.lineWidth = 1 + layer * 0.24;
+    ctx.lineWidth = 1.1 + layer * 0.3;
     ctx.beginPath();
     ctx.moveTo(-30, y);
     for (let x = -30; x <= width + 30; x += 28) {
@@ -269,18 +309,18 @@ function makeArtwork(index, ratio) {
   for (let i = 0; i < 16; i += 1) {
     const x = ((index * 73 + i * 47) % width);
     const bandWidth = 1 + i % 3;
-    ctx.fillStyle = `rgba(${i % 2 ? palette[1] : palette[0]}, ${0.055 + (i % 4) * 0.015})`;
+    ctx.fillStyle = `rgba(${i % 2 ? palette[1] : palette[0]}, ${0.05 + (i % 4) * 0.014})`;
     ctx.fillRect(x, 0, bandWidth, height);
   }
 
   for (let i = 0; i < 2200; i += 1) {
-    const tone = 140 + ((i + index * 19) % 96);
-    const alpha = i % 11 === 0 ? 0.09 : 0.035;
-    ctx.fillStyle = `rgba(${tone}, ${tone}, ${tone}, ${alpha})`;
+    const tone = 80 + ((i + index * 19) % 84);
+    const alpha = i % 11 === 0 ? 0.062 : 0.026;
+    ctx.fillStyle = `rgba(${tone}, ${tone - 8}, ${tone - 18}, ${alpha})`;
     ctx.fillRect((i * 31) % width, (i * 67) % height, 1, 1);
   }
 
-  ctx.strokeStyle = "rgba(220,248,255,0.2)";
+  ctx.strokeStyle = "rgba(8,43,131,0.12)";
   ctx.lineWidth = 1;
   for (let i = 0; i < 10; i += 1) {
     const y = height * (0.12 + i * 0.075);
@@ -537,16 +577,16 @@ function initWebglParticles() {
     void main() {
       vec2 uv = gl_PointCoord - vec2(0.5);
       float r = length(uv);
-      float core = smoothstep(0.22, 0.0, r);
-      float halo = smoothstep(0.5, 0.02, r) * 0.45;
-      float twinkle = 0.78 + 0.22 * sin(v_seed * 40.0);
-      vec3 deepBlue = vec3(0.04, 0.22, 0.92);
-      vec3 electric = vec3(0.18, 0.72, 1.0);
-      vec3 whiteHot = vec3(0.88, 0.99, 1.0);
+      float core = smoothstep(0.24, 0.0, r);
+      float halo = smoothstep(0.56, 0.02, r) * 0.62;
+      float twinkle = 0.82 + 0.26 * sin(v_seed * 40.0);
+      vec3 deepBlue = vec3(0.02, 0.14, 0.66);
+      vec3 electric = vec3(0.08, 0.48, 1.0);
+      vec3 whiteHot = vec3(0.94, 0.99, 1.0);
       vec3 color = mix(deepBlue, electric, v_depth);
-      color = mix(color, whiteHot, core * 0.82);
-      float alpha = (core + halo) * (0.26 + v_depth * 0.74) * twinkle * v_alpha;
-      gl_FragColor = vec4(color * (0.85 + core * 1.8), alpha);
+      color = mix(color, whiteHot, core * 0.74);
+      float alpha = (core + halo) * (0.42 + v_depth * 0.88) * twinkle * v_alpha;
+      gl_FragColor = vec4(color * (0.92 + core * 1.9), alpha);
     }
   `);
 
@@ -1330,8 +1370,9 @@ async function toggleGestureControl() {
       import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_TASKS_VERSION}/+esm`),
       navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: GESTURE_CAMERA_WIDTH },
+          height: { ideal: GESTURE_CAMERA_HEIGHT },
+          frameRate: { ideal: 24, max: 30 },
           facingMode: "user",
         },
         audio: false,
@@ -1355,6 +1396,9 @@ async function toggleGestureControl() {
     state.gesture.landmarker = landmarker;
     state.gesture.active = true;
     state.gesture.lastVideoTime = -1;
+    state.gesture.lastDetectAt = 0;
+    state.gesture.detectCost = 0;
+    state.gesture.suspendUntil = 0;
     state.gesture.lastCenterX = null;
     state.gesture.anchorX = null;
     resetGestureState();
@@ -1396,10 +1440,18 @@ function stopGestureControl() {
 function runGestureFrame() {
   if (!state.gesture.active || !state.gesture.landmarker) return;
 
+  const now = performance.now();
+  advanceGestureDrag();
+
   if (gestureVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-      gestureVideo.currentTime !== state.gesture.lastVideoTime) {
+      gestureVideo.currentTime !== state.gesture.lastVideoTime &&
+      now >= state.gesture.suspendUntil &&
+      now - state.gesture.lastDetectAt >= GESTURE_DETECTION_INTERVAL) {
+    state.gesture.lastDetectAt = now;
     state.gesture.lastVideoTime = gestureVideo.currentTime;
-    const result = state.gesture.landmarker.detectForVideo(gestureVideo, performance.now());
+    const detectStartedAt = performance.now();
+    const result = state.gesture.landmarker.detectForVideo(gestureVideo, now);
+    state.gesture.detectCost = state.gesture.detectCost * 0.82 + (performance.now() - detectStartedAt) * 0.18;
     handleGestureResult(result);
   }
 
@@ -1415,6 +1467,11 @@ function resetGestureState() {
   state.gesture.dragActive = false;
   state.gesture.dragX = 0;
   state.gesture.dragY = 0;
+  state.gesture.dragTargetX = 0;
+  state.gesture.dragTargetY = 0;
+  state.gesture.lastDetectAt = 0;
+  state.gesture.detectCost = 0;
+  state.gesture.suspendUntil = 0;
   state.gesture.lastAction = "none";
 }
 
@@ -1509,15 +1566,29 @@ function handleGestureResult(result) {
     const current = MODES.indexOf(state.mode);
     const nextIndex = clamp(current + direction, 0, MODES.length - 1);
     if (nextIndex !== current) {
-      state.gesture.lastSwitchAt = now;
-      state.gesture.commandReady = false;
-      state.gesture.lastAction = gesture;
-      setMode(MODES[nextIndex]);
-      showToast(`Gesture ${MODE_NAMES[MODES[nextIndex]]}`);
+      scheduleGestureModeSwitch(MODES[nextIndex], gesture, now);
     }
   }
 
   state.gesture.lastCenterX = screenX * 0.72 + (state.gesture.lastCenterX ?? screenX) * 0.28;
+}
+
+function scheduleGestureModeSwitch(nextMode, gesture, now = performance.now()) {
+  state.gesture.lastSwitchAt = now;
+  state.gesture.commandReady = false;
+  state.gesture.lastAction = gesture;
+  state.gesture.suspendUntil = now + GESTURE_SWITCH_DETECTION_PAUSE;
+  state.gesture.lastDetectAt = now;
+  endGestureDrag();
+
+  requestAnimationFrame(() => {
+    if (!state.gesture.active) return;
+    state.gesture.suspendUntil = Math.max(
+      state.gesture.suspendUntil,
+      performance.now() + GESTURE_SWITCH_DETECTION_PAUSE
+    );
+    setMode(nextMode);
+  });
 }
 
 function updateStableGesture(gesture) {
@@ -1575,23 +1646,40 @@ function simulateGestureDrag(screenX, screenY) {
     state.gesture.dragActive = true;
     state.gesture.dragX = x;
     state.gesture.dragY = y;
+    state.gesture.dragTargetX = x;
+    state.gesture.dragTargetY = y;
     state.isPointerDown = true;
     state.didDrag = false;
     document.body.classList.add("is-dragging");
     return;
   }
 
-  const dx = (x - state.gesture.dragX) * GESTURE_DRAG_SCALE;
-  const dy = (y - state.gesture.dragY) * GESTURE_DRAG_SCALE;
-  applyVirtualDrag(dx, dy);
-  state.gesture.dragX = x;
-  state.gesture.dragY = y;
+  state.gesture.dragTargetX = x;
+  state.gesture.dragTargetY = y;
+}
+
+function advanceGestureDrag() {
+  if (!state.gesture.dragActive) return;
+
+  const nextX = state.gesture.dragX + (state.gesture.dragTargetX - state.gesture.dragX) * GESTURE_DRAG_LERP;
+  const nextY = state.gesture.dragY + (state.gesture.dragTargetY - state.gesture.dragY) * GESTURE_DRAG_LERP;
+  const dx = (nextX - state.gesture.dragX) * GESTURE_DRAG_SCALE;
+  const dy = (nextY - state.gesture.dragY) * GESTURE_DRAG_SCALE;
+
+  if (Math.abs(dx) + Math.abs(dy) > GESTURE_DRAG_EPSILON) {
+    applyVirtualDrag(dx, dy);
+  }
+
+  state.gesture.dragX = nextX;
+  state.gesture.dragY = nextY;
 }
 
 function endGestureDrag() {
   if (!state.gesture.dragActive) return;
   state.gesture.dragActive = false;
   state.isPointerDown = false;
+  state.gesture.dragTargetX = state.gesture.dragX;
+  state.gesture.dragTargetY = state.gesture.dragY;
   document.body.classList.remove("is-dragging");
   window.setTimeout(() => {
     state.didDrag = false;
@@ -2411,5 +2499,7 @@ if (["localhost", "127.0.0.1"].includes(window.location.hostname)) {
     getParticleTransition: () => getParticleTransition(performance.now()),
     handleGestureResult,
     classifyHandGesture,
+    advanceGestureDrag,
+    scheduleGestureModeSwitch,
   };
 }

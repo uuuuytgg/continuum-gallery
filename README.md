@@ -14,7 +14,9 @@ Live site:
 - Three viewing modes: masonry waterfall, spherical slide field, and particle
   sphere.
 - WebGL particle system with mode transitions, flow-field motion, drag wakes,
-  and a sacred Klein-blue / Monet-inspired visual palette.
+  and a sacred Klein-blue particle core.
+- Day / night visual themes: a warm paper daytime interface and a locked
+  deep-blue night mode inspired by the original gallery direction.
 - Floating circular photo previews layered above the particle field.
 - Google Photos Picker import with local preview caching through IndexedDB.
 - Optional gesture control powered by MediaPipe Hands.
@@ -50,6 +52,8 @@ particles create a sacred sci-fi core.
 - Click a photo in particle sphere mode to focus it in slide mode.
 - Press the hand button to enable gesture controls when your browser supports
   camera access.
+- Press the night/day button to switch between the warm daytime theme and the
+  original deep-blue night theme.
 
 ## Gesture Controls
 

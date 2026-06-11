@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Continuum Gallery - Particle Photo Gallery</title>
+    <meta
+      name="description"
+      content="Continuum Gallery is a cinematic static photo gallery with day and night themes, enhanced WebGL particles, gesture control, Google Photos import, and three immersive viewing modes."
+    />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="promo.css?v=20260611-day-night-release" />
+    <script defer src="promo.js?v=20260611-day-night-release"></script>
+  </head>
+  <body>
+    <canvas class="ambient-canvas" id="ambientCanvas" aria-hidden="true"></canvas>
+
+    <header class="site-header" aria-label="Project navigation">
+      <a class="brand" href="promo.html" aria-label="Continuum Gallery promotional page">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>Continuum Gallery</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#modes">三种形态</a>
+        <a href="#craft">技术质感</a>
+        <a href="index.html">打开体验</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="heroTitle">
+        <div class="hero-media" aria-hidden="true">
+          <img src="assets/promo/sphere.png" alt="" />
+        </div>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="hero-inner">
+          <p class="eyebrow">Open-source particle photo gallery · GitHub Pages</p>
+          <h1 id="heroTitle">Continuum Gallery</h1>
+          <p class="hero-copy">
+            把照片变成一座安静发光的影像圣殿。瀑布流、球形滑动、粒子球态、Google Photos、手势操控，
+            以及日间暖纸与夜间深蓝两套主题，被收束成一个纯静态、可开源部署的沉浸式相册。
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="index.html">进入 Gallery</a>
+            <a class="button secondary" href="https://github.com/uuuuytgg/continuum-gallery" rel="noopener" target="_blank">
+              查看源码
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics section-band" aria-label="Project highlights">
+        <div class="metric">
+          <strong>18,000</strong>
+          <span>WebGL particles</span>
+        </div>
+        <div class="metric">
+          <strong>2</strong>
+          <span>day / night themes</span>
+        </div>
+        <div class="metric">
+          <strong>0</strong>
+          <span>build step</span>
+        </div>
+        <div class="metric">
+          <strong>0.10.35</strong>
+          <span>MediaPipe Hands</span>
+        </div>
+      </section>
+
+      <section class="showcase section-band" aria-labelledby="showcaseTitle">
+        <div class="section-heading">
+          <p class="eyebrow">Visual system</p>
+          <h2 id="showcaseTitle">不是背景特效，而是影像的第二层空间。</h2>
+          <p>
+            粒子场不再只是贴在画面后面的装饰。它跟随预览球的滑动产生尾流、延迟和能量变化，
+            在日间主题里保持清晰蓝白发光，在夜间主题里回到原版深蓝宇宙场。
+          </p>
+        </div>
+        <div class="image-strip" aria-label="Gallery screenshots">
+          <figure class="strip-frame reveal">
+            <img src="assets/promo/waterfall.png" alt="Continuum Gallery waterfall mode screenshot" />
+            <figcaption>Waterfall</figcaption>
+          </figure>
+          <figure class="strip-frame is-large reveal">
+            <img src="assets/promo/orbit.png" alt="Continuum Gallery spherical slide mode screenshot" />
+            <figcaption>Spherical Slide</figcaption>
+          </figure>
+          <figure class="strip-frame reveal">
+            <img src="assets/promo/sphere.png" alt="Continuum Gallery particle sphere mode screenshot" />
+            <figcaption>Particle Sphere</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="modes section-band" id="modes" aria-labelledby="modesTitle">
+        <div class="section-heading narrow">
+          <p class="eyebrow">Three states</p>
+          <h2 id="modesTitle">从阅读，到游移，再到降临。</h2>
+        </div>
+        <div class="mode-grid">
+          <article class="mode-card reveal">
+            <p class="mode-index">01</p>
+            <h3>瀑布流</h3>
+            <p>用于快速浏览全部影像，保留相册最基本的秩序感和扫描效率。</p>
+          </article>
+          <article class="mode-card reveal">
+            <p class="mode-index">02</p>
+            <h3>球形滑动</h3>
+            <p>圆形预览图漂浮在整体粒子流场之上，拖拽时背景产生惯性尾流，而不是廉价贴图。</p>
+          </article>
+          <article class="mode-card reveal">
+            <p class="mode-index">03</p>
+            <h3>粒子球态</h3>
+            <p>照片进入发光粒子球，蓝白光点组成神圣而克制的数字天体。</p>
+          </article>
+          <article class="mode-card reveal">
+            <p class="mode-index">04</p>
+            <h3>日夜主题</h3>
+            <p>日间模式保留暖纸和克莱因蓝的高级感，夜间模式锁定原版深蓝科幻场域。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="craft section-band" id="craft" aria-labelledby="craftTitle">
+        <div class="section-heading">
+          <p class="eyebrow">Interaction craft</p>
+          <h2 id="craftTitle">所有高级感都服务于真实交互。</h2>
+        </div>
+        <div class="craft-layout">
+          <div class="craft-copy reveal">
+            <h3>Mode switch 不只是切页。</h3>
+            <p>
+              每一次切换都会触发粒子形态过渡、照片布局重排和 UI 状态同步。主题切换会保留当前浏览形态；
+              手势触发时，
+              MediaPipe 识别会在切换动画期间让出渲染预算，避免推理和粒子动画抢帧。
+            </p>
+          </div>
+          <dl class="spec-list reveal">
+            <div>
+              <dt>Themes</dt>
+              <dd>Day paper theme, locked night theme</dd>
+            </div>
+            <div>
+              <dt>Gesture</dt>
+              <dd>V sign next, thumb previous, fist drag</dd>
+            </div>
+            <div>
+              <dt>Photos</dt>
+              <dd>Google Photos Picker, read-only scope</dd>
+            </div>
+            <div>
+              <dt>Storage</dt>
+              <dd>IndexedDB local preview cache</dd>
+            </div>
+            <div>
+              <dt>Deploy</dt>
+              <dd>Static HTML, CSS, JavaScript</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="release section-band" aria-labelledby="releaseTitle">
+        <div class="release-visual reveal" aria-hidden="true">
+          <img src="assets/promo/sphere.png" alt="" />
+        </div>
+        <div class="release-copy reveal">
+          <p class="eyebrow">Open source release</p>
+          <h2 id="releaseTitle">为 GitHub Pages 准备的沉浸式影像作品。</h2>
+          <p>
+            不需要构建流程，不需要后端服务。直接部署，直接体验，直接把一个普通相册变成可以展示、
+            可以演示、也可以被继续改造的开源项目。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="index.html">本地打开体验</a>
+            <a class="button secondary" href="CHANGELOG.md">查看更新日志</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Continuum Gallery</span>
+      <span>Sacred Particle Gallery Update</span>
+    </footer>
+  </body>
+</html>

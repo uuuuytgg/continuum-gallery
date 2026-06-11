@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-06-11 - Day / Night Theme Update
+
+### Added
+
+- Added a day / night theme switcher that keeps the current gallery mode while
+  changing the visual atmosphere.
+- Added a warm paper daytime theme for the main gallery UI.
+- Added a locked deep-blue night theme to preserve the original sci-fi visual
+  direction.
+- Added a premium promotional page for the open-source release.
+
+### Changed
+
+- Strengthened the daytime particle rendering so the particle sphere remains
+  visible and luminous on the lighter background.
+- Updated the generated demo imagery to better match the warm paper and
+  Klein-blue visual system.
+- Updated the promotional page copy to reflect the new dual-theme release.
+
+### Verification
+
+- `git diff --check -- index.html app.js styles.css promo.html promo.css promo.js README.md CHANGELOG.md`
+- Local static preview at `http://127.0.0.1:8765/`
+- Browser screenshot checks for day sphere, night sphere, and mobile layout
+
 ## 2026-06-06 - Sacred Particle Gallery Update
 
 This is a major visual and interaction update for Continuum Gallery. The release

@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Continuum Gallery</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="styles.css?v=20260606-monet-klein-v1" />
+    <link rel="stylesheet" href="styles.css?v=20260607-day-night-particles-v3" />
     <script async defer src="https://accounts.google.com/gsi/client"></script>
-    <script defer src="app.js?v=20260606-monet-klein-v1"></script>
+    <script defer src="app.js?v=20260607-day-night-particles-v3"></script>
   </head>
-  <body data-mode="waterfall">
+  <body data-mode="waterfall" data-theme="day">
     <div class="app" id="app">
       <header class="topbar">
         <div class="brand">
@@ -26,6 +26,9 @@
           </button>
           <button class="icon-button gesture-button" id="gestureButton" type="button" aria-label="启用手势切换" title="手势切换">
             <span aria-hidden="true">手</span>
+          </button>
+          <button class="icon-button theme-button" id="themeButton" type="button" aria-label="切换夜间模式" title="切换夜间模式">
+            <span aria-hidden="true">夜</span>
           </button>
           <button class="icon-button" id="focusButton" type="button" aria-label="聚焦当前照片" title="聚焦">
             <span aria-hidden="true">◎</span>
