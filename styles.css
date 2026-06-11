@@ -96,7 +96,6 @@ button {
 
 .brand,
 .icon-button,
-.promo-link,
 .google-button,
 .photos-panel,
 .bottom-bar,
@@ -171,7 +170,6 @@ button {
   pointer-events: auto;
 }
 
-.promo-link,
 .google-button {
   display: flex;
   align-items: center;
@@ -183,30 +181,6 @@ button {
   border: 1px solid var(--line);
   color: var(--ink);
   cursor: pointer;
-}
-
-.promo-link {
-  gap: 7px;
-  text-decoration: none;
-}
-
-.promo-link span {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(8, 43, 131, 0.12);
-  color: var(--blue-deep);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.promo-link strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
 }
 
 .google-button span {
@@ -1001,7 +975,6 @@ body[data-theme="night"]::after {
 
 body[data-theme="night"] .brand,
 body[data-theme="night"] .icon-button,
-body[data-theme="night"] .promo-link,
 body[data-theme="night"] .google-button,
 body[data-theme="night"] .photos-panel,
 body[data-theme="night"] .bottom-bar,
@@ -1029,11 +1002,6 @@ body[data-theme="night"] .brand-mark {
 body[data-theme="night"] .theme-button {
   border-color: rgba(189, 244, 255, 0.32);
   background: linear-gradient(135deg, rgba(23, 85, 160, 0.72), rgba(6, 29, 58, 0.58));
-}
-
-body[data-theme="night"] .promo-link span {
-  background: rgba(111, 218, 255, 0.12);
-  color: rgba(241, 251, 255, 0.92);
 }
 
 body[data-theme="night"].gesture-active .gesture-button {
@@ -1191,7 +1159,6 @@ body[data-theme="night"] .photos-status {
     padding: 0 10px;
   }
 
-  .promo-link strong,
   .google-button strong {
     display: none;
   }
