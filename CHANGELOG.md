@@ -18,6 +18,9 @@
 - Updated the generated demo imagery to better match the warm paper and
   Klein-blue visual system.
 - Updated the promotional page copy to reflect the new dual-theme release.
+- Reworked the repository README into a Simplified Chinese default project
+  homepage with a separate English README and direct links to the live gallery,
+  promo page, and changelog.
 
 ### Verification
 

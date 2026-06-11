@@ -1,106 +1,124 @@
+<div align="center">
+
 # Continuum Gallery
 
-把照片变成一座会呼吸的粒子圣殿。
+把照片从相册列表，推向一个会呼吸的粒子空间。
 
-[在线体验](https://uuuuytgg.github.io/continuum-gallery/) | [宣传页](https://uuuuytgg.github.io/continuum-gallery/promo.html) | [更新日志](https://github.com/uuuuytgg/continuum-gallery/blob/main/CHANGELOG.md) | [源码仓库](https://github.com/uuuuytgg/continuum-gallery)
+[简体中文](README.md) · [English](README.en.md)
 
-![Particle Sphere](assets/promo/sphere.png)
+[在线体验](https://uuuuytgg.github.io/continuum-gallery/) ·
+[宣传页](https://uuuuytgg.github.io/continuum-gallery/promo.html) ·
+[更新日志](CHANGELOG.md)
 
-## 项目概览
+<br>
 
-Continuum Gallery 是一个面向 GitHub Pages 的纯静态沉浸式相册。它把瀑布流浏览、球形滑动、粒子球态、Google Photos 导入、手势控制，以及日夜双主题，收束成一个不需要构建流程、不依赖后端服务的开源前端作品。
+<img src="assets/promo/sphere.png" alt="Continuum Gallery 日间粒子球态" width="100%">
 
-宣传页不是独立的另一个产品，而是这个项目的发布叙事页面：
-它负责展示视觉方向、模式差异和交互气质；真正的产品入口仍然是 Gallery 本体。
+</div>
 
-## 立即访问
+## 项目定位
 
-- [Gallery 主体验](https://uuuuytgg.github.io/continuum-gallery/)
-- [Promo 宣传页](https://uuuuytgg.github.io/continuum-gallery/promo.html)
-- [CHANGELOG](https://github.com/uuuuytgg/continuum-gallery/blob/main/CHANGELOG.md)
+Continuum Gallery 是一个可以直接部署到 GitHub Pages 的沉浸式静态相册。它保留普通相册的浏览效率，同时把照片带入球形滑动、粒子球态、日夜主题、Google Photos 导入和可选手势控制组成的完整视觉系统。
 
-## 核心特性
+宣传页负责展示项目气质和发布叙事；Gallery 本体负责真实交互体验。两者共用同一套最新截图、视觉语言和版本说明。
 
-- 三种浏览模式：
-  瀑布流、球形滑动、粒子球态
-- 日 / 夜双主题：
-  日间是暖纸与克莱因蓝，夜间保留原版深蓝科幻场域
-- WebGL 粒子系统：
-  模式切换、粒子流场、拖拽尾流、球态发光核心
-- Google Photos Picker：
-  浏览器内选择照片，并使用 IndexedDB 做本地预览缓存
-- MediaPipe Hands：
-  可选手势交互，支持切换模式与拖拽模拟
-- 纯静态部署：
-  只有 `HTML + CSS + JavaScript`
+## 入口
 
-## 模式说明
+| 入口 | 用途 |
+| --- | --- |
+| [打开 Gallery](https://uuuuytgg.github.io/continuum-gallery/) | 直接体验相册、模式切换、主题切换与手势入口 |
+| [查看宣传页](https://uuuuytgg.github.io/continuum-gallery/promo.html) | 了解视觉方向、功能亮点和发布叙事 |
+| [阅读更新日志](CHANGELOG.md) | 查看大版本变化、修复项和验证记录 |
+| [English README](README.en.md) | 独立英文文档，不与默认中文首页混排 |
 
-### 1. 瀑布流
+## 视觉预览
 
-用于快速浏览完整图片集，保持相册最基本的秩序感和浏览效率。
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/promo/waterfall.png" alt="瀑布流模式">
+      <br>
+      <sub>瀑布流：快速浏览完整照片集。</sub>
+    </td>
+    <td width="50%">
+      <img src="assets/promo/orbit.png" alt="球形滑动模式">
+      <br>
+      <sub>球形滑动：预览球与整体粒子流场一起移动。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="assets/promo/sphere.png" alt="日间粒子球态">
+      <br>
+      <sub>日间粒子球：暖纸背景与克莱因蓝粒子。</sub>
+    </td>
+    <td width="50%">
+      <img src="assets/promo/night.png" alt="夜间粒子球态">
+      <br>
+      <sub>夜间粒子球：锁定原版深蓝科幻场域。</sub>
+    </td>
+  </tr>
+</table>
 
-### 2. 球形滑动
+## 核心能力
 
-圆形预览图组成一个可拖拽的空间场。图片球保持滑动浏览的主体地位，背景粒子跟随它们产生延迟、尾流和能量变化，而不是一层廉价贴图。
+| 能力 | 说明 |
+| --- | --- |
+| 三种浏览形态 | 瀑布流、球形滑动、粒子球态，对应阅读、游移、沉浸三种使用状态 |
+| WebGL 粒子系统 | 粒子会参与模式切换、滑动尾流和球态聚合，不只是静态背景贴图 |
+| 日夜主题 | 日间使用暖纸与克莱因蓝；夜间保留深蓝、低照度、科幻感更强的原版方向 |
+| Google Photos Picker | 在浏览器内选择照片，以只读 scope 导入预览 |
+| 本地预览缓存 | 支持 IndexedDB 缓存导入后的预览资源，减少重复加载 |
+| 可选手势交互 | MediaPipe Hands 支持 V、拇指、握拳三类手势控制 |
+| 纯静态部署 | 只有 HTML、CSS、JavaScript，不需要构建流程或后端服务 |
 
-### 3. 粒子球态
+## 三种模式
 
-照片漂浮在发光粒子球表面，蓝白粒子组成一个高密度、神圣感更强的数字天体。
-
-## 主题系统
-
-### 日间模式
-
-- 暖纸背景
-- 克莱因蓝交互高亮
-- 更明显的蓝白粒子显示
-- 更适合作为作品展示和开源项目首页视觉
-
-### 夜间模式
-
-- 深蓝黑场背景
-- 保留原版科幻视觉方向
-- 更像沉浸式装置或演示现场
+| 模式 | 体验重点 |
+| --- | --- |
+| 瀑布流 | 最接近传统相册，用于快速扫描与打开单张照片 |
+| 球形滑动 | 圆形预览图漂浮在统一粒子流场前方，拖拽时背景产生延迟、尾流和能量变化 |
+| 粒子球态 | 照片分布在发光粒子球表面，蓝白粒子聚成一个更明确的数字天体 |
 
 ## 控制方式
 
-- 点击底部模式按钮切换视图
-- 在球形滑动和粒子球态中拖拽移动画面
-- 在滑动模式下使用滚轮横向浏览
-- 使用 `Ctrl + 滚轮` 在模式间快速切换
-- 在瀑布流或滑动模式中点击照片打开 Viewer
-- 在粒子球态中点击照片会先聚焦回滑动模式
-- 点击顶部 `夜 / 日` 按钮切换主题
-- 点击顶部手势按钮启用手势交互
+| 操作 | 效果 |
+| --- | --- |
+| 底部模式按钮 | 在瀑布流、球形滑动、粒子球态之间切换 |
+| 拖拽画面 | 在球形滑动和粒子球态中移动视角 |
+| 滚轮 | 在滑动模式中横向浏览 |
+| `Ctrl + 滚轮` | 快速切换模式 |
+| 顶部日夜按钮 | 在日间主题和夜间主题之间切换，并保留当前模式 |
+| 顶部手势按钮 | 开启或关闭浏览器内手势识别 |
 
 ## 手势交互
 
-手势识别在浏览器中通过 MediaPipe Hands 运行：
+手势识别通过 MediaPipe Hands 在浏览器本地运行。为降低误触，项目不再使用手掌横移切换模式，而是改成更明确的三类手势。
 
-- `V`：
-  切换到下一档模式
-- `大拇指`：
-  返回上一档模式
-- `握拳`：
-  模拟拖拽
+| 手势 | 动作 |
+| --- | --- |
+| `V` | 切换到下一档模式 |
+| 大拇指 | 返回上一档模式 |
+| 握拳 | 模拟鼠标拖拽 |
 
-项目里做了稳定帧判断和冷却控制，用来降低误触率，并在模式切换动画期间让出部分预算，减少卡顿。
+切换动画期间会降低手势推理压力，把更多渲染预算留给粒子重组和照片布局过渡。
 
-## Google Photos 接入
+## Google Photos 配置
 
-1. 打开 Google Cloud Console
-2. 启用 **Google Photos Picker API**
-3. 创建 OAuth 2.0 Web Client ID
-4. 在 **Authorized JavaScript origins** 中加入：
-   `https://uuuuytgg.github.io`
-5. 打开部署后的站点
-6. 点击 `Photos`，填入 Client ID，保存后选择照片
+1. 打开 Google Cloud Console。
+2. 启用 Google Photos Picker API。
+3. 创建 OAuth 2.0 Web Client ID。
+4. 在 Authorized JavaScript origins 中加入 `https://uuuuytgg.github.io`。
+5. 打开部署后的 Gallery。
+6. 点击顶部 `Photos`，填入 Client ID，保存后选择照片。
 
 请求 scope：
-`https://www.googleapis.com/auth/photospicker.mediaitems.readonly`
 
-导入后的媒体会以浏览器对象 URL 的形式本地使用，并在支持时写入 IndexedDB 做预览缓存。
+```text
+https://www.googleapis.com/auth/photospicker.mediaitems.readonly
+```
+
+导入后的媒体会以浏览器对象 URL 的形式用于本地预览；浏览器支持时，会写入 IndexedDB 做预览缓存。
 
 ## 本地预览
 
@@ -110,41 +128,22 @@ python -m http.server 8765
 
 打开：
 
-- [本地 Gallery](http://127.0.0.1:8765/)
-- [本地 Promo](http://127.0.0.1:8765/promo.html)
+| 页面 | 地址 |
+| --- | --- |
+| Gallery | http://127.0.0.1:8765/ |
+| 宣传页 | http://127.0.0.1:8765/promo.html |
 
-## 项目文件
+## 项目结构
 
-- `index.html`：
-  Gallery 主入口
-- `styles.css`：
-  布局、模式样式、日夜主题
-- `app.js`：
-  画廊状态、粒子系统、Google Photos、Viewer、手势控制
-- `promo.html` / `promo.css` / `promo.js`：
-  宣传页与发布叙事页
-- `assets/promo/`：
-  宣传页引用的项目预览图
-- `CHANGELOG.md`：
-  发布记录
+| 路径 | 说明 |
+| --- | --- |
+| `index.html` | Gallery 主入口 |
+| `styles.css` | Gallery 布局、模式样式和日夜主题 |
+| `app.js` | 画廊状态、粒子系统、Google Photos、Viewer、手势控制 |
+| `promo.html` / `promo.css` / `promo.js` | 宣传页与发布叙事页面 |
+| `assets/promo/` | README 与宣传页共用的项目预览图 |
+| `CHANGELOG.md` | 版本记录、修复项和验证记录 |
 
-## English
+## 版本重点
 
-Continuum Gallery is a static immersive photo gallery for GitHub Pages. It combines a masonry waterfall, a draggable spherical slide field, a luminous particle sphere, optional Google Photos import, browser-side gesture control, and day / night themes in a single deployable HTML project.
-
-Links:
-
-- [Open Gallery](https://uuuuytgg.github.io/continuum-gallery/)
-- [Open Promo Page](https://uuuuytgg.github.io/continuum-gallery/promo.html)
-- [View Changelog](https://github.com/uuuuytgg/continuum-gallery/blob/main/CHANGELOG.md)
-
-Key points:
-
-- Three viewing modes:
-  waterfall, spherical slide, particle sphere
-- Day and night themes:
-  warm paper by day, deep-blue sci-fi by night
-- WebGL particle transitions, drag wakes, and luminous blue-white particle rendering
-- Google Photos Picker integration with IndexedDB preview caching
-- Optional MediaPipe Hands gesture control
-- Pure static deployment with no build step
+当前大版本完成了原版 HTML 闪烁修复、粒子球视觉升级、球形滑动真实粒子交互、手势控制改造、日夜双主题，以及开源发布页和双语 README。完整记录见 [CHANGELOG.md](CHANGELOG.md)。
