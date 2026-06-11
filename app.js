@@ -88,6 +88,11 @@ const state = {
   pointerY: -9999,
   transitionUntil: 0,
   lastZoomSwitch: 0,
+  viewport: {
+    isMobile: false,
+    zoomLockScale: 1,
+    zoomLockInverse: 1,
+  },
   viewer: {
     zoom: 1,
     panX: 0,
@@ -166,6 +171,7 @@ let imageLayoutTimer = 0;
 init();
 
 function init() {
+  updateViewportMode();
   applyTheme(localStorage.getItem(THEME_KEY) === "night" ? "night" : "day");
   googleClientIdInput.value = localStorage.getItem(GOOGLE_CLIENT_ID_KEY) || "";
   setGoogleStatus(googleClientIdInput.value ? "Client ID ready" : "Add Client ID");
@@ -178,6 +184,10 @@ function init() {
   restorePersistedPhotos();
 
   window.addEventListener("resize", handleResize);
+  window.addEventListener("pageshow", handleResize);
+  window.visualViewport?.addEventListener("resize", handleResize);
+  window.addEventListener("wheel", preventBrowserPageZoom, { passive: false, capture: true });
+  window.addEventListener("keydown", preventBrowserZoomShortcut, { capture: true });
   modeButtons.addEventListener("click", handleModeButton);
   immersiveButton.addEventListener("click", handleImmersive);
   focusButton.addEventListener("click", () => openViewer(state.selected));
@@ -697,6 +707,7 @@ function makeSacredParticle(index) {
 }
 
 function handleResize() {
+  updateViewportMode();
   resizeCanvas();
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
@@ -704,17 +715,83 @@ function handleResize() {
   }, 80);
 }
 
+function updateViewportMode() {
+  const root = document.documentElement;
+  const isMobile = detectMobileUa();
+  const viewportWidth = Math.max(1, window.innerWidth || root.clientWidth || 1);
+  const desktopReferenceWidth = Math.max(
+    window.screen?.availWidth || 0,
+    window.screen?.width || 0,
+    window.outerWidth || 0,
+  );
+  const zoomRatio = desktopReferenceWidth > 0 ? desktopReferenceWidth / viewportWidth : 1;
+  const zoomLockScale = !isMobile && desktopReferenceWidth >= 900 && zoomRatio > 1.34
+    ? clamp(1 / zoomRatio, 0.18, 1)
+    : 1;
+  const zoomLockInverse = 1 / zoomLockScale;
+
+  state.viewport.isMobile = isMobile;
+  state.viewport.zoomLockScale = zoomLockScale;
+  state.viewport.zoomLockInverse = zoomLockInverse;
+  root.classList.toggle("is-mobile-ua", isMobile);
+  root.classList.toggle("is-desktop-ua", !isMobile);
+  root.classList.toggle("is-desktop-zoom-locked", zoomLockScale < 0.999);
+  root.style.setProperty("--desktop-zoom-lock-scale", zoomLockScale.toFixed(5));
+  root.style.setProperty("--desktop-zoom-lock-inverse", zoomLockInverse.toFixed(5));
+}
+
+function detectMobileUa() {
+  const ua = navigator.userAgent || "";
+  const uaDataMobile = Boolean(navigator.userAgentData?.mobile);
+  const classicMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+  const iPadDesktopUa = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  return uaDataMobile || classicMobile || iPadDesktopUa;
+}
+
+function getStageSize() {
+  return {
+    width: Math.max(1, stage.clientWidth || window.innerWidth || 1),
+    height: Math.max(1, stage.clientHeight || window.innerHeight || 1),
+  };
+}
+
+function getRenderDpr() {
+  const effectiveDpr = (window.devicePixelRatio || 1) * (state.viewport.zoomLockScale || 1);
+  return clamp(effectiveDpr, 1, 2);
+}
+
+function toLayoutPoint(clientX, clientY) {
+  const scale = state.viewport.zoomLockScale || 1;
+  return {
+    x: clientX / scale,
+    y: clientY / scale,
+  };
+}
+
+function preventBrowserPageZoom(event) {
+  if (!event.ctrlKey) return;
+  event.preventDefault();
+}
+
+function preventBrowserZoomShortcut(event) {
+  if (!event.ctrlKey && !event.metaKey) return;
+  if (!["+", "=", "-", "_", "0"].includes(event.key)) return;
+  if (viewer.classList.contains("is-open")) return;
+  event.preventDefault();
+}
+
 function resizeCanvas() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  particleCanvas.width = Math.round(window.innerWidth * dpr);
-  particleCanvas.height = Math.round(window.innerHeight * dpr);
-  particleCanvas.style.width = `${window.innerWidth}px`;
-  particleCanvas.style.height = `${window.innerHeight}px`;
+  const { width, height } = getStageSize();
+  const dpr = getRenderDpr();
+  particleCanvas.width = Math.round(width * dpr);
+  particleCanvas.height = Math.round(height * dpr);
+  particleCanvas.style.width = `${width}px`;
+  particleCanvas.style.height = `${height}px`;
   if (particleGl) particleGl.viewport(0, 0, particleCanvas.width, particleCanvas.height);
-  grainCanvas.width = Math.round(window.innerWidth * dpr);
-  grainCanvas.height = Math.round(window.innerHeight * dpr);
-  grainCanvas.style.width = `${window.innerWidth}px`;
-  grainCanvas.style.height = `${window.innerHeight}px`;
+  grainCanvas.width = Math.round(width * dpr);
+  grainCanvas.height = Math.round(height * dpr);
+  grainCanvas.style.width = `${width}px`;
+  grainCanvas.style.height = `${height}px`;
   grainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -1219,23 +1296,25 @@ function handlePointerDown(event) {
   if (viewer.classList.contains("is-open")) return;
   if (state.mode === "waterfall") return;
 
+  const point = toLayoutPoint(event.clientX, event.clientY);
   state.isPointerDown = true;
   state.didDrag = false;
-  state.lastX = event.clientX;
-  state.lastY = event.clientY;
-  state.pointerX = event.clientX;
-  state.pointerY = event.clientY;
+  state.lastX = point.x;
+  state.lastY = point.y;
+  state.pointerX = point.x;
+  state.pointerY = point.y;
   document.body.classList.add("is-dragging");
   stage.setPointerCapture?.(event.pointerId);
 }
 
 function handlePointerMove(event) {
-  state.pointerX = event.clientX;
-  state.pointerY = event.clientY;
+  const point = toLayoutPoint(event.clientX, event.clientY);
+  state.pointerX = point.x;
+  state.pointerY = point.y;
   if (!state.isPointerDown) return;
 
-  const dx = event.clientX - state.lastX;
-  const dy = event.clientY - state.lastY;
+  const dx = point.x - state.lastX;
+  const dy = point.y - state.lastY;
   if (Math.abs(dx) + Math.abs(dy) > 4) state.didDrag = true;
 
   if (state.mode === "orbit") {
@@ -1254,8 +1333,8 @@ function handlePointerMove(event) {
     state.sphere.radiusBoost = Math.min(26, state.sphere.radiusBoost + Math.hypot(dx, dy) * 0.08);
   }
 
-  state.lastX = event.clientX;
-  state.lastY = event.clientY;
+  state.lastX = point.x;
+  state.lastY = point.y;
 }
 
 function handlePointerUp() {
@@ -1490,8 +1569,9 @@ function legacyHandleGestureResult(result) {
   }
 
   const screenX = 1 - centerX;
-  state.pointerX = screenX * window.innerWidth;
-  state.pointerY = centerY * window.innerHeight;
+  const { width, height } = getStageSize();
+  state.pointerX = screenX * width;
+  state.pointerY = centerY * height;
   state.sphere.radiusBoost = Math.min(40, state.sphere.radiusBoost + 0.55);
 
   const now = performance.now();
@@ -1532,8 +1612,9 @@ function handleGestureResult(result) {
   }
 
   const screenX = 1 - centerX;
-  state.pointerX = screenX * window.innerWidth;
-  state.pointerY = centerY * window.innerHeight;
+  const { width, height } = getStageSize();
+  state.pointerX = screenX * width;
+  state.pointerY = centerY * height;
   state.sphere.radiusBoost = Math.min(40, state.sphere.radiusBoost + 0.35);
 
   const now = performance.now();
@@ -1639,8 +1720,9 @@ function getFingerStates(landmarks) {
 }
 
 function simulateGestureDrag(screenX, screenY) {
-  const x = screenX * window.innerWidth;
-  const y = screenY * window.innerHeight;
+  const { width, height } = getStageSize();
+  const x = screenX * width;
+  const y = screenY * height;
 
   if (!state.gesture.dragActive) {
     state.gesture.dragActive = true;
@@ -2051,9 +2133,8 @@ function tick() {
 
 function drawWebglParticles(now) {
   if (!particleGl || !webglParticles) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  const dpr = getRenderDpr();
+  const { width, height } = getStageSize();
   const metrics = getSacredSphereMetrics(width, height);
   const transition = getParticleTransition(now);
   particleGl.clearColor(0, 0, 0, 0);
@@ -2105,8 +2186,7 @@ function getParticleModeValue(mode) {
 }
 
 function drawParticleField(now) {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  const { width, height } = getStageSize();
   grainCtx.clearRect(0, 0, width, height);
   grainCtx.save();
   grainCtx.globalCompositeOperation = "screen";
@@ -2254,7 +2334,8 @@ function drawParticleFilaments(projected, radius, palette) {
 
 function clearGrain() {
   if (!grainCanvas.width) return;
-  grainCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  const { width, height } = getStageSize();
+  grainCtx.clearRect(0, 0, width, height);
 }
 
 function resetViewerTransform() {
