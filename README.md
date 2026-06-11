@@ -1,84 +1,83 @@
 # Continuum Gallery
 
-Continuum Gallery is a cinematic, static photo gallery built for GitHub Pages.
-It combines local demo imagery, optional Google Photos import, WebGL particles,
-gesture controls, and three gallery modes designed for touch, mouse, and camera
-interaction.
+Continuum Gallery is a cinematic static photo gallery for GitHub Pages. It blends
+waterfall browsing, spherical slide navigation, a particle sphere presentation,
+optional Google Photos import, and browser-side gesture control into one
+deployable HTML project.
 
-Live site:
+## Quick Links
 
-`https://uuuuytgg.github.io/continuum-gallery/`
+- [Open Gallery](https://uuuuytgg.github.io/continuum-gallery/)
+- [Open Promo Page](https://uuuuytgg.github.io/continuum-gallery/promo.html)
+- [View Changelog](https://github.com/uuuuytgg/continuum-gallery/blob/main/CHANGELOG.md)
+- [Browse Source](https://github.com/uuuuytgg/continuum-gallery)
 
-## Highlights
+## What It Includes
 
-- Three viewing modes: masonry waterfall, spherical slide field, and particle
-  sphere.
-- WebGL particle system with mode transitions, flow-field motion, drag wakes,
-  and a sacred Klein-blue particle core.
-- Day / night visual themes: a warm paper daytime interface and a locked
-  deep-blue night mode inspired by the original gallery direction.
-- Floating circular photo previews layered above the particle field.
-- Google Photos Picker import with local preview caching through IndexedDB.
-- Optional gesture control powered by MediaPipe Hands.
-- Static deployment: no build step, backend, or server runtime required.
+- Three viewing modes: waterfall, spherical slide, and particle sphere
+- Day / night themes:
+  warm paper by day, deep-blue sci-fi field by night
+- WebGL particle renderer with mode transitions, flow wakes, and luminous
+  Klein-blue particle energy
+- Floating circular photo previews layered over the particle field
+- Google Photos Picker import with IndexedDB preview caching
+- Optional MediaPipe Hands gesture control
+- Plain static deployment:
+  no build step, no backend, no server runtime required
 
-## Gallery Modes
+## Modes
 
 ### Waterfall
 
-A responsive masonry view for browsing the full photo set quickly. It keeps the
-interaction simple and scroll-friendly, and works as the default entry mode.
+A masonry-style browsing view for scanning the full image set quickly.
 
 ### Spherical Slide
 
-A draggable field of circular previews. The image spheres keep their original
-sliding-gallery behavior while the WebGL particle field behind them follows with
-lag, parallax, and drag energy. This mode is built for tactile exploration
-instead of a flat decorative background.
+A draggable field of circular previews. The photo spheres keep their tactile
+sliding behavior while the particle field behind them follows with lag,
+parallax, and motion energy.
 
 ### Particle Sphere
 
-A more immersive presentation mode where the gallery forms a luminous particle
-sphere. Photos float on the sphere surface while thousands of blue-white
-particles create a sacred sci-fi core.
+An immersive presentation state where photos float on a luminous particle
+sphere made of dense blue-white points.
 
 ## Controls
 
-- Click the bottom mode buttons to switch views.
-- Drag in spherical slide or particle sphere mode to move the gallery.
-- Use the mouse wheel in slide mode to pan the field.
-- Use `Ctrl` + wheel to step between modes.
-- Click a photo in waterfall or slide mode to open the viewer.
-- Click a photo in particle sphere mode to focus it in slide mode.
-- Press the hand button to enable gesture controls when your browser supports
-  camera access.
-- Press the night/day button to switch between the warm daytime theme and the
-  original deep-blue night theme.
+- Click the bottom mode buttons to switch views
+- Drag in spherical slide or particle sphere mode to move the gallery
+- Use the mouse wheel in slide mode to pan the field
+- Use `Ctrl` + wheel to step between modes
+- Click a photo in waterfall or slide mode to open the viewer
+- Click a photo in particle sphere mode to focus it in slide mode
+- Click the `夜 / 日` theme button to switch between day and night themes
+- Press the hand button to enable gesture controls when camera access is allowed
+- Click the `Promo` button in the top bar to open the promotional page
 
 ## Gesture Controls
 
-Gesture control is optional and runs in the browser with MediaPipe Hands:
+Gesture control runs in the browser with MediaPipe Hands:
 
-- V sign: switch to the next mode.
-- Thumb gesture: return to the previous mode.
-- Fist: simulate drag movement.
+- V sign:
+  switch to the next mode
+- Thumb gesture:
+  return to the previous mode
+- Fist:
+  simulate drag movement
 
-The implementation uses cooldowns and stable-frame checks to reduce accidental
-mode switching.
+Stable-frame checks and cooldowns are used to reduce accidental switching.
 
 ## Google Photos Picker
 
 Continuum Gallery can import selected photos from Google Photos.
 
-1. Open Google Cloud Console.
-2. Enable **Google Photos Picker API**.
-3. Create an OAuth 2.0 Web Client ID.
+1. Open Google Cloud Console
+2. Enable **Google Photos Picker API**
+3. Create an OAuth 2.0 Web Client ID
 4. Add your GitHub Pages origin to **Authorized JavaScript origins**:
-
    `https://uuuuytgg.github.io`
-
-5. Open the deployed site.
-6. Press **Photos**, paste the Client ID, save it, then choose photos.
+5. Open the deployed site
+6. Press **Photos**, paste the Client ID, save it, then choose photos
 
 The app requests the
 `https://www.googleapis.com/auth/photospicker.mediaitems.readonly` scope.
@@ -87,8 +86,8 @@ with IndexedDB where available.
 
 ## Local Preview
 
-Because this is a static site, you can open `index.html` directly in a browser.
-For the most reliable preview, serve the folder with any static server:
+Open the project directly in a browser, or serve it locally for the most
+reliable preview:
 
 ```bash
 python -m http.server 8765
@@ -96,24 +95,26 @@ python -m http.server 8765
 
 Then open:
 
-`http://127.0.0.1:8765/`
+- [Local Gallery](http://127.0.0.1:8765/)
+- [Local Promo Page](http://127.0.0.1:8765/promo.html)
 
 ## Project Files
 
-- `index.html` - static entry point and UI shell.
-- `styles.css` - layout, mode styling, and visual theme.
-- `app.js` - gallery state, WebGL particles, Google Photos, viewer, and gesture
-  logic.
-- `CHANGELOG.md` - release notes.
+- `index.html`:
+  gallery entry and UI shell
+- `styles.css`:
+  themes, layout, and mode styling
+- `app.js`:
+  gallery state, particles, Google Photos, viewer, and gestures
+- `promo.html`, `promo.css`, `promo.js`:
+  promotional page
+- `CHANGELOG.md`:
+  release history
 
-This repository root is intentionally kept focused on the active static site.
-Generated screenshots, recordings, and local task artifacts should stay outside
-the deployed site files.
+## GitHub Pages
 
-## Deploy To GitHub Pages
-
-1. Push the repository to GitHub.
-2. Enable GitHub Pages from the `main` branch root.
-3. Visit `https://uuuuytgg.github.io/continuum-gallery/`.
+1. Push the repository to GitHub
+2. Enable GitHub Pages from the `main` branch root
+3. Visit [Continuum Gallery](https://uuuuytgg.github.io/continuum-gallery/)
 
 No build command is required.
