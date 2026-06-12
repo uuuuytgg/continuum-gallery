@@ -9,11 +9,13 @@
       content="Continuum Gallery is a cinematic static photo gallery with day and night themes, enhanced WebGL particles, gesture control, Google Photos import, and three immersive viewing modes."
     />
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="promo.css?v=20260611-day-night-release" />
-    <script defer src="promo.js?v=20260611-day-night-release"></script>
+    <link rel="stylesheet" href="promo.css?v=20260611-promo-theme-switch-v2" />
+    <script defer src="promo.js?v=20260611-promo-theme-switch-v2"></script>
   </head>
-  <body>
+  <body data-promo-theme="day">
     <canvas class="ambient-canvas" id="ambientCanvas" aria-hidden="true"></canvas>
+    <div class="theme-transition-mask" aria-hidden="true"></div>
+    <canvas class="burst-canvas" id="burstCanvas" aria-hidden="true"></canvas>
 
     <header class="site-header" aria-label="Project navigation">
       <a class="brand" href="promo.html" aria-label="Continuum Gallery promotional page">
@@ -30,13 +32,29 @@
     <main>
       <section class="hero" aria-labelledby="heroTitle">
         <div class="hero-media" aria-hidden="true">
-          <img src="assets/promo/sphere.png" alt="" />
+          <img
+            id="heroImage"
+            src="assets/promo/sphere.png"
+            data-day-src="assets/promo/sphere.png"
+            data-night-src="assets/promo/night-sphere.png"
+            alt=""
+          />
         </div>
         <div class="hero-shade" aria-hidden="true"></div>
         <div class="hero-inner">
-          <p class="eyebrow">Open-source particle photo gallery · GitHub Pages</p>
+          <p
+            class="eyebrow"
+            data-theme-copy
+            data-day-text="Open-source particle photo gallery · GitHub Pages"
+            data-night-text="Klein-blue night field · sacred particle release"
+          >Open-source particle photo gallery · GitHub Pages</p>
           <h1 id="heroTitle">Continuum Gallery</h1>
-          <p class="hero-copy">
+          <p
+            class="hero-copy"
+            data-theme-copy
+            data-day-text="把照片变成一座安静发光的影像圣殿。瀑布流、球形滑动、粒子球态、Google Photos、手势操控，以及日间暖纸与夜间深蓝两套主题，被收束成一个纯静态、可开源部署的沉浸式相册。"
+            data-night-text="进入夜间后，暖纸退场，克莱因蓝成为主光源。截图、粒子和页面材质会一起切到深蓝场域，让宣传页与 Gallery 的夜间模式保持同一种神圣、克制、科幻的呼吸。"
+          >
             把照片变成一座安静发光的影像圣殿。瀑布流、球形滑动、粒子球态、Google Photos、手势操控，
             以及日间暖纸与夜间深蓝两套主题，被收束成一个纯静态、可开源部署的沉浸式相册。
           </p>
@@ -79,15 +97,30 @@
         </div>
         <div class="image-strip" aria-label="Gallery screenshots">
           <figure class="strip-frame reveal">
-            <img src="assets/promo/waterfall.png" alt="Continuum Gallery waterfall mode screenshot" />
+            <img
+              src="assets/promo/waterfall.png"
+              data-day-src="assets/promo/waterfall.png"
+              data-night-src="assets/promo/night-waterfall.png"
+              alt="Continuum Gallery waterfall mode screenshot"
+            />
             <figcaption>Waterfall</figcaption>
           </figure>
           <figure class="strip-frame is-large reveal">
-            <img src="assets/promo/orbit.png" alt="Continuum Gallery spherical slide mode screenshot" />
+            <img
+              src="assets/promo/orbit.png"
+              data-day-src="assets/promo/orbit.png"
+              data-night-src="assets/promo/night-orbit.png"
+              alt="Continuum Gallery spherical slide mode screenshot"
+            />
             <figcaption>Spherical Slide</figcaption>
           </figure>
           <figure class="strip-frame reveal">
-            <img src="assets/promo/sphere.png" alt="Continuum Gallery particle sphere mode screenshot" />
+            <img
+              src="assets/promo/sphere.png"
+              data-day-src="assets/promo/sphere.png"
+              data-night-src="assets/promo/night-sphere.png"
+              alt="Continuum Gallery particle sphere mode screenshot"
+            />
             <figcaption>Particle Sphere</figcaption>
           </figure>
         </div>
@@ -114,10 +147,24 @@
             <h3>粒子球态</h3>
             <p>照片进入发光粒子球，蓝白光点组成神圣而克制的数字天体。</p>
           </article>
-          <article class="mode-card reveal">
+          <article class="mode-card theme-mode-card reveal">
             <p class="mode-index">04</p>
-            <h3>日夜主题</h3>
-            <p>日间模式保留暖纸和克莱因蓝的高级感，夜间模式锁定原版深蓝科幻场域。</p>
+            <h3
+              data-theme-copy
+              data-day-text="日夜主题"
+              data-night-text="夜间降临"
+            >日夜主题</h3>
+            <p
+              data-theme-copy
+              data-day-text="日间模式保留暖纸和克莱因蓝的高级感，夜间模式锁定原版深蓝科幻场域。"
+              data-night-text="切到夜间后，宣传页、截图和粒子材质一起进入深蓝场域，贴近 Gallery 的原版科幻视觉。"
+            >日间模式保留暖纸和克莱因蓝的高级感，夜间模式锁定原版深蓝科幻场域。</p>
+            <button class="theme-story-toggle" id="themeStoryToggle" type="button" aria-pressed="false">
+              <span class="toggle-track" aria-hidden="true">
+                <span class="toggle-thumb"></span>
+              </span>
+              <span class="toggle-label" data-theme-label>切到夜间</span>
+            </button>
           </article>
         </div>
       </section>
@@ -163,7 +210,12 @@
 
       <section class="release section-band" aria-labelledby="releaseTitle">
         <div class="release-visual reveal" aria-hidden="true">
-          <img src="assets/promo/sphere.png" alt="" />
+          <img
+            src="assets/promo/sphere.png"
+            data-day-src="assets/promo/sphere.png"
+            data-night-src="assets/promo/night-sphere.png"
+            alt=""
+          />
         </div>
         <div class="release-copy reveal">
           <p class="eyebrow">Open source release</p>
