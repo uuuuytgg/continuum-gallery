@@ -4,6 +4,7 @@ const burstCanvas = document.getElementById("burstCanvas");
 const transitionGl = burstCanvas?.getContext("webgl", { alpha: true, premultipliedAlpha: false });
 const themeStoryToggle = document.getElementById("themeStoryToggle");
 const themeLabel = document.querySelector("[data-theme-label]");
+const interactionCursor = document.getElementById("interactionCursor");
 const pointer = { x: -9999, y: -9999 };
 
 const TRANSITION_PARTICLE_COUNT = 18000;
@@ -20,6 +21,7 @@ let dpr = 1;
 let transitionStartedAt = 0;
 let transitionActive = false;
 let transitionTargetTheme = "night";
+let motionReady = false;
 
 function resizeCanvas() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -345,6 +347,90 @@ function startThemeBurst(targetTheme) {
   document.body.classList.add("is-theme-bursting");
 }
 
+function animateThemeInterface(targetTheme) {
+  const gsapInstance = window.gsap;
+  if (!gsapInstance || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const toDay = targetTheme === "day";
+  const pulseColor = toDay ? "rgba(8, 43, 131, 0.18)" : "rgba(183, 239, 228, 0.24)";
+  const overlayTargets = [".theme-transition-mask", ".burst-canvas"];
+  const contentTargets = ".hero-inner, .strip-frame, .mode-card";
+  gsapInstance.killTweensOf([
+    ...overlayTargets,
+    ".brand-mark",
+    ".theme-story-toggle",
+    ".hero-inner",
+    ".strip-frame",
+    ".mode-card",
+  ]);
+
+  const timeline = gsapInstance.timeline({ defaults: { ease: "power3.inOut" } });
+  timeline
+    .set(overlayTargets, { autoAlpha: 0 }, 0)
+    .to(".theme-transition-mask", {
+      autoAlpha: 1,
+      duration: 0.44,
+      ease: "power2.out",
+    }, 0)
+    .to(".burst-canvas", {
+      autoAlpha: toDay ? 0.78 : 0.68,
+      duration: 0.42,
+      ease: "power2.out",
+    }, 0.04)
+    .to(".brand-mark", {
+      scale: 1.22,
+      rotation: toDay ? -48 : 48,
+      boxShadow: `0 0 38px ${pulseColor}`,
+      duration: 0.42,
+    }, 0)
+    .to(".theme-story-toggle", {
+      scale: 0.97,
+      y: 1,
+      duration: 0.22,
+    }, 0)
+    .to(".hero-inner", {
+      y: toDay ? 10 : -10,
+      autoAlpha: 0.72,
+      duration: 0.46,
+    }, 0.04)
+    .to(".strip-frame, .mode-card", {
+      y: (index) => (index % 2 === 0 ? -8 : 8),
+      autoAlpha: 0.72,
+      stagger: { amount: 0.18, from: "center" },
+      duration: 0.46,
+    }, 0.08)
+    .to(".brand-mark", {
+      scale: 1,
+      rotation: 0,
+      clearProps: "boxShadow",
+      duration: 0.62,
+    }, 0.62)
+    .to(".theme-story-toggle", {
+      scale: 1,
+      y: 0,
+      duration: 0.4,
+    }, 0.68)
+    .to(contentTargets, {
+      y: 0,
+      autoAlpha: 1,
+      stagger: { amount: 0.16, from: "center" },
+      duration: 0.72,
+      clearProps: "opacity,visibility,transform",
+    }, 0.86)
+    .to(".theme-transition-mask", {
+      autoAlpha: 0,
+      duration: 0.54,
+      ease: "power2.inOut",
+    }, 1.58)
+    .to(".burst-canvas", {
+      autoAlpha: 0,
+      duration: 0.4,
+      ease: "power2.in",
+    }, 1.78)
+    .set(contentTargets, { clearProps: "opacity,visibility,transform" }, 2.22)
+    .set(".brand-mark, .theme-story-toggle", { clearProps: "transform,boxShadow" }, 2.22);
+}
+
 function drawThemeTransition(now) {
   if (!transitionGl || !transitionParticles || !transitionActive) return;
   const elapsed = now - transitionStartedAt;
@@ -394,6 +480,8 @@ function drawThemeTransition(now) {
 }
 
 function initReveal() {
+  if (initGsapMotion()) return;
+
   const items = document.querySelectorAll(".reveal");
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -405,6 +493,222 @@ function initReveal() {
   }, { threshold: 0.16 });
 
   items.forEach((item) => observer.observe(item));
+}
+
+function initGsapMotion() {
+  const gsapInstance = window.gsap;
+  const ScrollTrigger = window.ScrollTrigger;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!gsapInstance || !ScrollTrigger || reduceMotion) return false;
+
+  gsapInstance.registerPlugin(ScrollTrigger);
+  motionReady = true;
+  window.__promoMotionReady = true;
+  gsapInstance.set(".interaction-cursor", { xPercent: -50, yPercent: -50 });
+
+  gsapInstance.set(".hero-inner", { autoAlpha: 0, y: 28 });
+  gsapInstance.set(".brand, .nav-links", { autoAlpha: 0, y: -10 });
+
+  gsapInstance.timeline({ defaults: { ease: "power3.out" } })
+    .to(".brand, .nav-links", { autoAlpha: 1, y: 0, duration: 0.72, stagger: 0.08 }, 0.05)
+    .to(".hero-inner", { autoAlpha: 1, y: 0, duration: 1.05 }, 0.18)
+    .fromTo(".hero-media img", { scale: 1.08, yPercent: -1.2 }, { scale: 1.04, yPercent: 0, duration: 1.35 }, 0);
+
+  gsapInstance.to(".motion-progress span", {
+    scaleX: 1,
+    ease: "none",
+    scrollTrigger: {
+      trigger: document.documentElement,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: 0.25,
+    },
+  });
+
+  ScrollTrigger.create({
+    start: 60,
+    end: "max",
+    toggleClass: { targets: ".site-header", className: "is-condensed" },
+  });
+
+  gsapInstance.to(".hero-media img", {
+    yPercent: 7,
+    scale: 1.08,
+    ease: "none",
+    scrollTrigger: {
+      trigger: ".hero",
+      start: "top top",
+      end: "bottom top",
+      scrub: 0.8,
+    },
+  });
+
+  gsapInstance.to(".ambient-canvas", {
+    opacity: 0.62,
+    ease: "none",
+    scrollTrigger: {
+      trigger: ".showcase",
+      start: "top 85%",
+      end: "bottom 30%",
+      scrub: 0.9,
+    },
+  });
+
+  ScrollTrigger.batch(".reveal", {
+    start: "top 82%",
+    once: true,
+    onEnter: (batch) => {
+      gsapInstance.fromTo(batch, {
+        autoAlpha: 0,
+        y: 28,
+      }, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.86,
+        ease: "power3.out",
+        stagger: { amount: 0.18, from: "start" },
+        clearProps: "opacity,visibility,transform",
+      });
+    },
+  });
+
+  document.querySelectorAll(".strip-frame").forEach((frame, index) => {
+    gsapInstance.fromTo(frame,
+      { y: index === 1 ? 46 : 22, rotationX: index === 1 ? 0 : 2 },
+      {
+        y: index === 1 ? 18 : -4,
+        rotationX: 0,
+        ease: "none",
+        scrollTrigger: {
+          trigger: ".showcase",
+          start: "top bottom",
+          end: "bottom top",
+          scrub: 0.7,
+        },
+      });
+  });
+
+  gsapInstance.fromTo(".metric strong",
+    { textShadow: "0 0 0 rgba(8, 43, 131, 0)" },
+    {
+      textShadow: "0 0 18px rgba(8, 43, 131, 0.16)",
+      stagger: 0.08,
+      duration: 0.7,
+      yoyo: true,
+      repeat: 1,
+      scrollTrigger: {
+        trigger: ".metrics",
+        start: "top 72%",
+      },
+    });
+
+  initScrollSpy(ScrollTrigger);
+  initMagneticInteractions(gsapInstance);
+  initTiltInteractions(gsapInstance);
+  initCursorGlow(gsapInstance);
+  return true;
+}
+
+function initScrollSpy(ScrollTrigger) {
+  const links = [...document.querySelectorAll(".nav-links a[href^='#']")];
+  for (const link of links) {
+    const target = document.querySelector(link.getAttribute("href"));
+    if (!target) continue;
+    ScrollTrigger.create({
+      trigger: target,
+      start: "top center",
+      end: "bottom center",
+      onToggle: (self) => {
+        if (!self.isActive) return;
+        links.forEach((item) => item.classList.toggle("is-active", item === link));
+      },
+    });
+  }
+}
+
+function initMagneticInteractions(gsapInstance) {
+  const targets = document.querySelectorAll(".button, .brand, .nav-links a, .theme-story-toggle");
+  targets.forEach((target) => {
+    target.addEventListener("pointermove", (event) => {
+      const rect = target.getBoundingClientRect();
+      const x = event.clientX - rect.left - rect.width / 2;
+      const y = event.clientY - rect.top - rect.height / 2;
+      gsapInstance.to(target, {
+        x: x * 0.12,
+        y: y * 0.16,
+        duration: 0.36,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+    target.addEventListener("pointerleave", () => {
+      gsapInstance.to(target, {
+        x: 0,
+        y: 0,
+        duration: 0.46,
+        ease: "elastic.out(1, 0.5)",
+        overwrite: "auto",
+      });
+    });
+  });
+}
+
+function initTiltInteractions(gsapInstance) {
+  const targets = document.querySelectorAll(".mode-card, .strip-frame, .release-visual");
+  targets.forEach((target) => {
+    target.addEventListener("pointermove", (event) => {
+      const rect = target.getBoundingClientRect();
+      const px = (event.clientX - rect.left) / rect.width - 0.5;
+      const py = (event.clientY - rect.top) / rect.height - 0.5;
+      gsapInstance.to(target, {
+        rotationY: px * 4,
+        rotationX: -py * 4,
+        z: 10,
+        transformPerspective: 900,
+        duration: 0.42,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+    target.addEventListener("pointerleave", () => {
+      gsapInstance.to(target, {
+        rotationX: 0,
+        rotationY: 0,
+        z: 0,
+        duration: 0.72,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+  });
+}
+
+function initCursorGlow(gsapInstance) {
+  if (!interactionCursor || window.matchMedia("(pointer: coarse)").matches) return;
+
+  window.addEventListener("pointermove", (event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest("a, button, .mode-card, .strip-frame, .release-visual")
+      : null;
+    gsapInstance.to(interactionCursor, {
+      x: event.clientX,
+      y: event.clientY,
+      scale: target ? 1 : 0.72,
+      autoAlpha: target ? 1 : 0.22,
+      duration: target ? 0.28 : 0.5,
+      ease: "power3.out",
+      overwrite: "auto",
+    });
+  });
+
+  window.addEventListener("pointerleave", () => {
+    gsapInstance.to(interactionCursor, {
+      autoAlpha: 0,
+      scale: 0.62,
+      duration: 0.28,
+      overwrite: "auto",
+    });
+  });
 }
 
 function preloadThemeImages() {
@@ -427,6 +731,7 @@ function setPromoTheme(theme, { animate = true } = {}) {
     document.body.classList.remove("is-theme-revealing");
     document.body.dataset.transitionTarget = nextTheme;
     startThemeBurst(nextTheme);
+    animateThemeInterface(nextTheme);
   } else {
     delete document.body.dataset.transitionTarget;
   }
@@ -450,8 +755,17 @@ function setPromoTheme(theme, { animate = true } = {}) {
     window.setTimeout(() => {
       document.body.classList.remove("is-theme-swapping", "is-theme-revealing");
       delete document.body.dataset.transitionTarget;
+      clearThemeMotionState();
     }, themeCleanupDelay);
   }
+}
+
+function clearThemeMotionState() {
+  const gsapInstance = window.gsap;
+  if (!gsapInstance) return;
+  gsapInstance.set(".hero-inner, .strip-frame, .mode-card, .theme-story-toggle, .brand-mark", {
+    clearProps: "opacity,visibility,transform,boxShadow",
+  });
 }
 
 function togglePromoTheme() {
